@@ -59,7 +59,7 @@ class Envisalink:
 					bytes = [byte for byte in chunk]
 					print "debug: receive reply, %d bytes: %s" % (len(chunk), bytes)
 				reply = reply + chunk
-				if reply[-2:] == '\x0D\x0A':
+				if len(chunk) == 0 or reply[-2:] == '\x0D\x0A':
 					break
 				# BUG: what happens if we get CRLF in middle of reply... we should find it, and stash the rest for the next invocation
 				# Should not depend on network messages arriving in neat-sized chunks! And we need to avoid tripping over CRLF sequences
@@ -86,6 +86,8 @@ if __name__ == '__main__':
 			e.set_verbose(True)
 		e.connect(options.host)
 		e.login(options.password)
+
+		e.send_command(1)
 		
 		# monitor loop
 		sleep = 0
@@ -94,7 +96,7 @@ if __name__ == '__main__':
 			if reply == None:
 				sleep += 1
 				if sleep == 10:
-					e.send_command(1)
+					e.send_command(0)
 					sleep = 0
 				else:
 					time.sleep(1)

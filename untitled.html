@@ -1,0 +1,111 @@
+
+
+        <div id="contents">
+
+            {block:Posts}
+
+            <div class="post content {PostType}">
+
+                {block:Date}
+                    {block:NewDayDate}
+                        <h2 class='post-date'>
+                            {DayOfMonth} {Month} {Year}
+                        </h2>
+                    {/block:NewDayDate}
+                {/block:Date}
+
+                {block:Regular}
+                    {block:Title}<h3><a href="{Permalink}">{Title}</a></h3>{/block:Title}
+                    <div class="go">
+                        {Body}
+                    </div>                
+                {/block:Regular}
+
+                {block:Photo}
+                    {LinkOpenTag}<img src="{PhotoURL-400}" alt="{PhotoAlt}"/>{LinkCloseTag}
+                    {block:Caption}
+                        <div class="description">{Caption}</div>
+                    {/block:Caption}
+                {/block:Photo}
+
+                {block:Link}
+                    <h3><a href="{URL}" class="link" {Target}>{Name}</a></h3>
+                    {block:Description}
+                        <div class="description">{Description}</div>
+                    {/block:Description}
+                {/block:Link}
+
+                {block:Quote}
+                    <div class="symbol">&#147;</div>
+                    <div class="quote">
+                        {Quote}
+                    </div>
+                    {block:Source}
+                        <div class="description">&mdash; {Source}</div>
+                    {/block:Source}
+                {/block:Quote}
+
+                {block:Conversation}
+                    {block:Title}<h3><a href="{Permalink}">{Title}</a></h3>{/block:Title}
+                    <ul>
+                        {block:Lines}
+                            <li class="{Alt}">
+                                {block:Label}<span class="label">{Label}</span>{/block:Label}
+                                {Line}
+                            </li>
+                        {/block:Lines}
+                    </ul>
+                {/block:Conversation}
+
+                {block:Audio}
+                    {AudioPlayerGrey}
+                    {block:Caption}
+                        <div class="description">{Caption}</div>
+                    {/block:Caption}
+                {/block:Audio}
+
+                {block:Video}
+                    {Video-400}
+                    {block:Caption}
+                        <div class="description">{Caption}</div>
+                    {/block:Caption}
+                {/block:Video}
+                
+                {block:RebloggedFrom}
+                    <div class="description">{lang:Reblogged from ReblogParentTitle 2}</div>
+                {/block:RebloggedFrom}
+
+                {block:HasTags}
+                    <div class="description">
+                        {lang:Tags}: {block:Tags}<a href="{TagURL}">{Tag}</a> {/block:Tags}
+                    </div>
+                {/block:HasTags}
+
+            </div>
+
+            {/block:Posts}
+
+            {block:PostNotes}
+            <div class="post">
+
+                <div class="content notes">
+                    
+                    {block:Permalink}
+                    {block:IfDisqusShortname}
+                    <div id="disqus_thread"></div>
+                    <script type="text/javascript" src="http://disqus.com/forums/{text:Disqus Shortname}/embed.js"></script>
+                    <noscript><a href="http://{text:Disqus Shortname}.disqus.com/?url=ref">{lang:View the discussion thread}</a></noscript>
+                    {/block:IfDisqusShortname}
+                    {/block:Permalink}
+                
+                </div>
+
+                <div class="content notes">
+
+                    {PostNotes}
+
+                </div>
+
+            </div>
+            {/block:PostNotes}                
+                
