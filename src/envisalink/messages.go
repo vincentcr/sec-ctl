@@ -1,119 +1,22 @@
 package envisalink
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 )
 
 var crlf = []byte("\r\n")
 
-type ClientCode int
-
-//go:generate stringer -type=ClientCode
-
-const (
-	Poll                              ClientCode = 0
-	StatusReport                      ClientCode = 1
-	DumpZoneTimers                    ClientCode = 8
-	NetworkLogin                      ClientCode = 5
-	SetTimeAndDate                    ClientCode = 10
-	CommandOutputControl              ClientCode = 20
-	PartitionArmControlAway           ClientCode = 30
-	PartitionArmControlStayArm        ClientCode = 31
-	PartitionArmControlZeroEntryDelay ClientCode = 32
-	PartitionArmControlWithCode       ClientCode = 33
-	PartitionDisarmControl            ClientCode = 40
-	TimeStampControl                  ClientCode = 55
-	TimeBroadcastControl              ClientCode = 56
-	TemperatureBroadcastControl       ClientCode = 57
-	TriggerPanicAlarm                 ClientCode = 60
-	SendKeystrokeString               ClientCode = 71
-	EnterUserCodeProgramming          ClientCode = 72
-	EnterUserProgramming              ClientCode = 73
-	KeepAlive                         ClientCode = 74
-	CodeSend                          ClientCode = 200
-)
-
-type ServerCode int
-
-const (
-	Ack                              ServerCode = 500
-	CmdErr                           ServerCode = 501
-	SysErr                           ServerCode = 502
-	LoginRes                         ServerCode = 505
-	KeypadLedState                   ServerCode = 510
-	KeypadLedFlashState              ServerCode = 511
-	SystemTime                       ServerCode = 550
-	RingDetect                       ServerCode = 560
-	IndoorTemperature                ServerCode = 561
-	OutdoorTemperature               ServerCode = 562
-	ZoneAlarm                        ServerCode = 601
-	ZoneAlarmRestore                 ServerCode = 602
-	ZoneTemper                       ServerCode = 603
-	ZoneTemperRestore                ServerCode = 604
-	ZoneFault                        ServerCode = 605
-	ZoneFaultRestore                 ServerCode = 606
-	ZoneOpen                         ServerCode = 609
-	ZoneRestore                      ServerCode = 610
-	ZoneTimerTick                    ServerCode = 615
-	DuressAlarm                      ServerCode = 620
-	FireAlarm                        ServerCode = 621
-	FireAlarmRestore                 ServerCode = 622
-	AuxillaryAlarm                   ServerCode = 623
-	AuxillaryAlarmRestore            ServerCode = 624
-	PanicAlarm                       ServerCode = 625
-	PanicAlarmRestore                ServerCode = 626
-	SmokeOrAuxAlarm                  ServerCode = 631
-	SmokeOrAuxAlarmRestore           ServerCode = 632
-	PartitionReady                   ServerCode = 650
-	PartitionNotReady                ServerCode = 651
-	PartitionArmed                   ServerCode = 652
-	PartitionReadyForceArmingEnabled ServerCode = 653
-	PartitionInAlarm                 ServerCode = 654
-	PartitionDisarmed                ServerCode = 655
-	ExitDelayInProgress              ServerCode = 656
-	EntryDelayInProgress             ServerCode = 657
-	KeypadLockOut                    ServerCode = 658
-	PartitionArmingFailed            ServerCode = 659
-	PGMOutputInProgress              ServerCode = 660
-	ChimeEnabled                     ServerCode = 663
-	ChimeDisabled                    ServerCode = 664
-	InvalidAccessCode                ServerCode = 670
-	FunctionNotAvailable             ServerCode = 671
-	ArmingFailed                     ServerCode = 672
-	PartitionBusy                    ServerCode = 673
-	SystemArmingInProgress           ServerCode = 674
-	SystemInInstallersMode           ServerCode = 680
-	UserClosing                      ServerCode = 700
-	SpecialClosing                   ServerCode = 701
-	PartialClosing                   ServerCode = 702
-	UserOpening                      ServerCode = 750
-	SpecialOpening                   ServerCode = 751
-	PanelBatteryTrouble              ServerCode = 800
-	PanelBatteryTroubleRestore       ServerCode = 801
-	PanelACTrouble                   ServerCode = 802
-	PanelACRestore                   ServerCode = 803
-	SystemBellTrouble                ServerCode = 806
-	SystemBellTroubleRestoral        ServerCode = 807
-	FTCTrouble                       ServerCode = 814
-	BufferNearFull                   ServerCode = 816
-	GeneralSystemTamper              ServerCode = 829
-	GeneralSystemTamperRestore       ServerCode = 830
-	TroubleLEDOn                     ServerCode = 840
-	TroubleLEDOff                    ServerCode = 841
-	FireTroubleAlarm                 ServerCode = 842
-	FireTroubleAlarmRestore          ServerCode = 843
-	VerboseTroubleStatus             ServerCode = 849
-	CodeRequired                     ServerCode = 900
-	CommandOutputPressed             ServerCode = 912
-	MasterCodeRequired               ServerCode = 921
-	InstallersCodeRequired           ServerCode = 922
-)
-
 type ClientMessage struct {
 	Code ClientCode
 	Data []byte
+}
+
+func (m ClientMessage) String() string {
+	return fmt.Sprintf("ClientMessage{code:%d, data:'%s'}\n", m.Code, m.Data)
 }
 
 type ServerMessage struct {
@@ -121,37 +24,76 @@ type ServerMessage struct {
 	Data []byte
 }
 
-/*
-       try:
-           data_end = -2
-           data_start = 3
+func (m ServerMessage) String() string {
+	return fmt.Sprintf("ServerMessage{code:%d, data:'%s'}\n", m.Code, m.Data)
+}
 
-           code_int = int(packet[:data_start])
-           data = packet[data_start:data_end]
-           checksum = packet[data_end:]
+func msgWrite(writer io.Writer, msg ClientMessage) error {
+	msgBytes := msgEncode(msg)
 
-           # logging.debug('packet=%s, data=%s, code_int=%s, checksum=%s',
-           #               packet, data, code_int, checksum)
-           code = ServerCodes.by_val(code_int)
-           msg = Message(code=code, data=data)
+	fmt.Printf("Sending %v, encoded: %v\n", msg, msgBytes)
 
-           msg._verify_checksum(checksum)
+	_, err := writer.Write(msgBytes)
+	return err
+}
 
-           return msg
-       except e:
-           raise Exception("Failed to decode: {}".format(packet)) from e
+func msgEncode(msg ClientMessage) []byte {
+	encoded := []byte(fmt.Sprintf("%03d", msg.Code))
 
-   def _verify_checksum(self, checksum_in):
-       cmd = self._encode_cmd()
-       checksum = self._compute_checksum(cmd)
-       assert checksum_in.lower() == checksum.lower(), \
-           "Bad checksum for %s: computed: %s; received: %s" % (
-               self,
-               checksum.lower(),
-               checksum_in.lower()
-           )
+	if msg.Data != nil {
+		encoded = append(encoded, msg.Data...)
+	}
 
-*/
+	checksum := msgChecksum(encoded)
+
+	return append(append(encoded, []byte(checksum)...), crlf...)
+}
+
+func msgReadAvailable(reader io.Reader) ([]ServerMessage, error) {
+	packetBytes, err := readUntilMarker(reader, crlf)
+	if err != nil {
+		return nil, fmt.Errorf("")
+	}
+	packets := bytes.Split(packetBytes, crlf)
+	msgs := make([]ServerMessage, len(packets))
+	for i, packet := range packets {
+		if len(packet) > 0 {
+			msg, err := msgDecode(packet)
+			if err != nil {
+				return nil, err
+			}
+			fmt.Printf("Received %v, decoded: %v\n", packet, msg)
+			msgs[i] = msg
+		}
+	}
+	return msgs, nil
+}
+
+func readUntilMarker(reader io.Reader, marker []byte) ([]byte, error) {
+
+	data := make([]byte, 0, 4096)
+	buf := make([]byte, 2048)
+	done := false
+
+	for !done {
+		fmt.Println("reading next buffer")
+		nRead, err := reader.Read(buf)
+		if err != nil {
+			return nil, err
+		}
+		if nRead == 0 {
+			return nil, fmt.Errorf("Unexpected end of input")
+		}
+		data = append(data, buf[:nRead]...)
+
+		// done when <marker bytes> are the last bytes of the transmission
+		potentialMarker := data[len(data)-len(marker):]
+		done = bytes.Compare(marker, potentialMarker) == 0
+	}
+
+	return data, nil
+}
+
 func msgDecode(msgBytes []byte) (ServerMessage, error) {
 	if len(msgBytes) < 5 {
 		return ServerMessage{}, fmt.Errorf("Got %d bytes, need at least 5", len(msgBytes))
@@ -168,9 +110,9 @@ func msgDecode(msgBytes []byte) (ServerMessage, error) {
 			msgBytes, data, expectedChecksum, actualChecksum)
 	}
 
-	codeInt, err := strconv.Atoi(string(codeBytes))
+	codeInt, err := msgCodeDecode(codeBytes)
 	if err != nil {
-		return ServerMessage{}, fmt.Errorf("failed to decode message %v: invalid code %s", msgBytes, codeBytes)
+		return ServerMessage{}, err
 	}
 
 	msg := ServerMessage{
@@ -179,19 +121,14 @@ func msgDecode(msgBytes []byte) (ServerMessage, error) {
 	}
 
 	return msg, nil
-
 }
 
-func msgEncode(msg ClientMessage) []byte {
-	encoded := []byte(fmt.Sprintf("%03d", msg.Code))
-
-	if msg.Data != nil {
-		encoded = append(encoded, msg.Data...)
+func msgCodeDecode(codeBytes []byte) (int, error) {
+	codeInt, err := strconv.Atoi(string(codeBytes))
+	if err != nil {
+		return -1, fmt.Errorf("invalid code bytes %s", codeBytes)
 	}
-
-	checksum := msgChecksum(encoded)
-
-	return append(append(encoded, []byte(checksum)...), crlf...)
+	return codeInt, nil
 }
 
 func msgChecksum(bytes []byte) string {

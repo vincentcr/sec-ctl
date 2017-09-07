@@ -1,9 +1,9 @@
 package main
 
-import "fmt"
 import "envisalink"
 
 func main() {
-	fmt.Println("Hello world!")
-	envisalink.Demo()
+	c := envisalink.NewClient()
+	c.Connect("192.168.86.12", "Q4m1gh")
+
 }
