@@ -1,4 +1,6 @@
-package envisalink
+package tpi
+
+import "fmt"
 
 type ZoneState string
 
@@ -18,8 +20,12 @@ type Zone struct {
 	State ZoneState
 }
 
-func newZone(id string) Zone {
-	return Zone{
+func newZone(id string) *Zone {
+	return &Zone{
 		ID: id,
 	}
+}
+
+func (z *Zone) String() string {
+	return fmt.Sprintf("Zone{ID:%v, State:%v}", z.ID, z.State)
 }
