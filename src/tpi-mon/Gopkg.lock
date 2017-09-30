@@ -2,31 +2,68 @@
 
 
 [[projects]]
-  name = "github.com/chzyer/readline"
+  branch = "master"
+  name = "github.com/gin-contrib/sse"
   packages = ["."]
-  revision = "62c6fe6193755f722b8b8788aa7357be55a50ff1"
-  version = "v1.4"
+  revision = "22d885f9ecc78bf4ee5d72b937e4bbcdc58e8cae"
 
 [[projects]]
-  name = "github.com/jroimartin/gocui"
-  packages = ["."]
-  revision = "4e9ce9a8e26f2ef33dfe297dbdfca148733b6b9b"
+  name = "github.com/gin-gonic/gin"
+  packages = [".","binding","render"]
+  revision = "d459835d2b077e44f7c9b453505ee29881d5d12d"
+  version = "v1.2"
 
 [[projects]]
-  name = "github.com/mattn/go-runewidth"
+  branch = "master"
+  name = "github.com/golang/protobuf"
+  packages = ["proto"]
+  revision = "130e6b02ab059e7b717a096f397c5b60111cae74"
+
+[[projects]]
+  name = "github.com/gorilla/websocket"
   packages = ["."]
-  revision = "9e777a8366cce605130a531d2cd6363d07ad7317"
+  revision = "ea4d1f681babbce9545c9c5f3d5194a789c89f5b"
+  version = "v1.2.0"
+
+[[projects]]
+  name = "github.com/imdario/mergo"
+  packages = ["."]
+  revision = "3e95a51e0639b4cf372f2ccf74c86749d747fbdc"
+  version = "0.2.2"
+
+[[projects]]
+  name = "github.com/mattn/go-isatty"
+  packages = ["."]
+  revision = "fc9e8d8ef48496124e79ae0df75490096eccf6fe"
   version = "v0.0.2"
 
 [[projects]]
   branch = "master"
-  name = "github.com/nsf/termbox-go"
+  name = "github.com/ugorji/go"
+  packages = ["codec"]
+  revision = "54210f4e076c57f351166f0ed60e67d3fca57a36"
+
+[[projects]]
+  branch = "master"
+  name = "golang.org/x/sys"
+  packages = ["unix"]
+  revision = "429f518978ab01db8bb6f44b66785088e7fba58b"
+
+[[projects]]
+  name = "gopkg.in/go-playground/validator.v8"
   packages = ["."]
-  revision = "4ed959e0540971545eddb8c75514973d670cf739"
+  revision = "5f1438d3fca68893a817e4a66806cea46a9e4ebf"
+  version = "v8.18.2"
+
+[[projects]]
+  branch = "v2"
+  name = "gopkg.in/yaml.v2"
+  packages = ["."]
+  revision = "eb3733d160e74a9c7e442f435eb3bea458e1d19f"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "4e072a5a61adbff83d7492ba9c0e630fdc9f861ca340d7df27456efb96394a79"
+  inputs-digest = "77d3cabfb88c890df317492da07b66a258dcac53fc38104f99290288520bd02e"
   solver-name = "gps-cdcl"
   solver-version = 1

@@ -22,5 +22,9 @@
 
 
 [[constraint]]
-  name = "github.com/jroimartin/gocui"
-  revision = "4e9ce9a8e26f2ef33dfe297dbdfca148733b6b9b"
+  name = "github.com/gin-gonic/gin"
+  version = "1.2.0"
+
+[[constraint]]
+  name = "github.com/gorilla/websocket"
+  version = "1.2.0"
