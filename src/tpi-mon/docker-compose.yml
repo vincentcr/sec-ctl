@@ -1,0 +1,23 @@
+version: "3.2"
+services:
+
+  tpi-mon-mock:
+    image: tpi-mon-mock
+    volumes:
+      - "./mock-tpi-state.json:/mock-tpi-state.json"
+    environment:
+      - "Tpimon.Mock.StateFilePath=/mock-tpi-state.json"
+
+  tpi-mon-cloud:
+    image: tpi-mon-cloud
+
+  tpi-mon-local:
+    image: tpi-mon-local
+    links:
+      - tpi-mon-mock:mock
+      - tpi-mon-cloud:cloud
+    environment:
+      - Tpimon.Local.TPIHost=mock
+      - Tpimon.Local.TPIPassword=mock123
+      - Tpimon.Local.CloudWSURL=ws://cloud:9754
+      - Tpimon.Local.CloudToken=cloud123
