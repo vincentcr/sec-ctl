@@ -1,11 +1,11 @@
-package mock
+package main
 
 import (
 	"fmt"
 	"log"
 	"net"
 	"os"
-	"tpi-mon/tpi"
+	"tpi-mon/pkg/site"
 
 	"github.com/gin-gonic/gin"
 )
@@ -17,9 +17,9 @@ func init() {
 }
 
 // Run creates a new mock server
-func Run(bindHost string, tpiPort uint, httpPort uint, stateFile string) error {
+func Run(bindHost string, tpiBindPort uint16, restBindPort uint16, password string, stateFile string) error {
 
-	state, err := newState(stateFile)
+	state, err := newState(password, stateFile)
 	if err != nil {
 		return err
 	}
@@ -28,8 +28,8 @@ func Run(bindHost string, tpiPort uint, httpPort uint, stateFile string) error {
 
 	errCh := make(chan error)
 
-	startMockTPI(ctrl, bindHost, tpiPort, errCh)
-	startRestAPI(ctrl, bindHost, httpPort, errCh)
+	startMockTPI(ctrl, bindHost, tpiBindPort, errCh)
+	startRESTAPI(ctrl, bindHost, restBindPort, errCh)
 
 	for {
 		select {
@@ -39,7 +39,7 @@ func Run(bindHost string, tpiPort uint, httpPort uint, stateFile string) error {
 	}
 }
 
-func startMockTPI(ctrl *controller, bindHost string, bindPort uint, errCh chan error) {
+func startMockTPI(ctrl *controller, bindHost string, bindPort uint16, errCh chan error) {
 	addr := fmt.Sprintf("%s:%d", bindHost, bindPort)
 	logger.Println("binding:", addr)
 	l, err := net.Listen("tcp", addr)
@@ -61,7 +61,7 @@ func startMockTPI(ctrl *controller, bindHost string, bindPort uint, errCh chan e
 
 }
 
-func startRestAPI(ctrl *controller, bindHost string, bindPort uint, errCh chan error) {
+func startRESTAPI(ctrl *controller, bindHost string, bindPort uint16, errCh chan error) {
 	r := gin.Default()
 	setupRoutes(r, ctrl)
 	go func() {
@@ -80,9 +80,9 @@ func setupRoutes(r *gin.Engine, ctrl *controller) {
 	//simulate alarms
 	r.POST("/sim/alarms/trigger", func(c *gin.Context) {
 		data := struct {
-			Type        tpi.AlarmType `json:"type" binding:"required"`
-			PartitionID string        `json:"partitionID"`
-			ZoneID      string        `json:"zoneID"`
+			Type        site.AlarmType `json:"type" binding:"required"`
+			PartitionID string         `json:"partitionID"`
+			ZoneID      string         `json:"zoneID"`
 		}{}
 
 		if err := c.BindJSON(&data); err != nil {
@@ -100,8 +100,8 @@ func setupRoutes(r *gin.Engine, ctrl *controller) {
 	//simulate alarm restoral
 	r.POST("/sim/alarms/restore", func(c *gin.Context) {
 		data := struct {
-			Type        tpi.AlarmType `json:"type" binding:"required"`
-			PartitionID string        `json:"partitionID"`
+			Type        site.AlarmType `json:"type" binding:"required"`
+			PartitionID string         `json:"partitionID"`
 		}{}
 
 		if err := c.BindJSON(&data); err != nil {

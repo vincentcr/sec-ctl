@@ -1,4 +1,4 @@
-package tpi
+package site
 
 import (
 	"fmt"
@@ -9,12 +9,13 @@ import (
 type EventLevel string
 
 const (
-	LevelDebug   EventLevel = "DEBUG"
-	LevelInfo    EventLevel = "INFO"
-	LevelWarn    EventLevel = "WARN"
-	LevelError   EventLevel = "ERROR"
-	LevelAlarm   EventLevel = "ALARM"
-	LevelTrouble EventLevel = "TROUBLE"
+	LevelDebug       EventLevel = "DEBUG"
+	LevelInfo        EventLevel = "INFO"
+	LevelWarn        EventLevel = "WARN"
+	LevelError       EventLevel = "ERROR"
+	LevelTrouble     EventLevel = "TROUBLE"
+	LevelAlarm       EventLevel = "ALARM"
+	LevelStateChange EventLevel = "STATE_CHANGE"
 )
 
 //Event represents a TPI event
@@ -30,7 +31,7 @@ type Event struct {
 	Data        map[string]interface{}
 }
 
-func newEvent(level EventLevel, code string) *Event {
+func NewEvent(level EventLevel, code string) *Event {
 	evt := &Event{
 		Level: level,
 		Code:  code,
@@ -41,34 +42,27 @@ func newEvent(level EventLevel, code string) *Event {
 	return evt
 }
 
-func newServerEvent(level EventLevel, code ServerCode) *Event {
-	e := newEvent(level, code.stringHuman())
-	desc := serverCodeDescriptions[code]
-	e.setDescription(desc)
-	return e
-}
-
-func (e *Event) setDescription(desc string) *Event {
+func (e *Event) SetDescription(desc string) *Event {
 	e.Description = desc
 	return e
 }
 
-func (e *Event) setPartition(partID string) *Event {
+func (e *Event) SetPartitionID(partID string) *Event {
 	e.PartitionID = partID
 	return e
 }
 
-func (e *Event) setZoneID(zoneID string) *Event {
+func (e *Event) SetZoneID(zoneID string) *Event {
 	e.ZoneID = zoneID
 	return e
 }
 
-func (e *Event) setUserID(userID string) *Event {
+func (e *Event) SetUserID(userID string) *Event {
 	e.UserID = userID
 	return e
 }
 
-func (e *Event) setData(k string, v interface{}) *Event {
+func (e *Event) SetData(k string, v interface{}) *Event {
 	e.Data[k] = v
 	return e
 }

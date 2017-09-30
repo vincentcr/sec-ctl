@@ -1,4 +1,4 @@
-package tpi
+package site
 
 import "fmt"
 
@@ -20,7 +20,7 @@ type Zone struct {
 	State ZoneState
 }
 
-func newZone(id string) *Zone {
+func NewZone(id string) *Zone {
 	return &Zone{
 		ID: id,
 	}

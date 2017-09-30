@@ -1,11 +1,11 @@
-package mock
+package main
 
 import (
 	"fmt"
 	"sync"
 	"time"
-	"tpi-mon/tpi"
-	"tpi-mon/tpi/proto"
+	"tpi-mon/pkg/site"
+	"tpi-mon/pkg/tpi"
 )
 
 const defaultArmDelay = time.Second * 15
@@ -60,7 +60,7 @@ func (ctrl *controller) processLoginRequest(msg tpi.ClientMessage) (bool, []tpi.
 	var res tpi.LoginRes
 
 	password := string(msg.Data)
-	success := password == ctrl.state.Password
+	success := password == ctrl.state.password
 	if success {
 		res = tpi.LoginResSuccess
 	} else {
@@ -94,7 +94,7 @@ func (ctrl *controller) processStatusReport(msg tpi.ClientMessage) ([]tpi.Server
 		var code tpi.ServerCode
 		if p.TroubleStateLED || p.KeypadLEDState != 0 || p.KeypadLEDFlashState != 0 {
 			code = tpi.ServerCodeTroubleLEDOn
-		} else if p.State != tpi.PartitionStateBusy {
+		} else if p.State != site.PartitionStateBusy {
 			code = tpi.ServerCodeTroubleLEDOff
 		}
 
@@ -105,7 +105,7 @@ func (ctrl *controller) processStatusReport(msg tpi.ClientMessage) ([]tpi.Server
 	}
 
 	if s.TroubleStatus != 0 {
-		data := proto.EncodeIntCode(int(s.TroubleStatus))
+		data := tpi.EncodeIntCode(int(s.TroubleStatus))
 		m := tpi.ServerMessage{Code: tpi.ServerCodeVerboseTroubleStatus, Data: data}
 		replies = append(replies, m)
 	}
@@ -113,42 +113,42 @@ func (ctrl *controller) processStatusReport(msg tpi.ClientMessage) ([]tpi.Server
 	return replies, nil
 }
 
-func zoneStateToServerCode(state tpi.ZoneState) tpi.ServerCode {
+func zoneStateToServerCode(state site.ZoneState) tpi.ServerCode {
 	switch state {
-	case tpi.ZoneStateAlarm:
+	case site.ZoneStateAlarm:
 		return tpi.ServerCodeZoneAlarm
-	case tpi.ZoneStateAlarmRestore:
+	case site.ZoneStateAlarmRestore:
 		return tpi.ServerCodeZoneAlarmRestore
-	case tpi.ZoneStateTemper:
+	case site.ZoneStateTemper:
 		return tpi.ServerCodeZoneTemper
-	case tpi.ZoneStateTemperRestore:
+	case site.ZoneStateTemperRestore:
 		return tpi.ServerCodeZoneTemperRestore
-	case tpi.ZoneStateFault:
+	case site.ZoneStateFault:
 		return tpi.ServerCodeZoneFault
-	case tpi.ZoneStateFaultRestore:
+	case site.ZoneStateFaultRestore:
 		return tpi.ServerCodeZoneFaultRestore
-	case tpi.ZoneStateOpen:
+	case site.ZoneStateOpen:
 		return tpi.ServerCodeZoneOpen
-	case tpi.ZoneStateRestore:
+	case site.ZoneStateRestore:
 		return tpi.ServerCodeZoneRestore
 	}
 
 	panic(fmt.Errorf("Unmapped zone state: %v", state))
 }
 
-func partitionStateToServerCode(state tpi.PartitionState) tpi.ServerCode {
+func partitionStateToServerCode(state site.PartitionState) tpi.ServerCode {
 	switch state {
-	case tpi.PartitionStateReady:
+	case site.PartitionStateReady:
 		return tpi.ServerCodePartitionReady
-	case tpi.PartitionStateNotReady:
+	case site.PartitionStateNotReady:
 		return tpi.ServerCodePartitionNotReady
-	case tpi.PartitionStateArmed:
+	case site.PartitionStateArmed:
 		return tpi.ServerCodePartitionArmed
-	case tpi.PartitionStateInAlarm:
+	case site.PartitionStateInAlarm:
 		return tpi.ServerCodePartitionInAlarm
-	case tpi.PartitionStateDisarmed:
+	case site.PartitionStateDisarmed:
 		return tpi.ServerCodePartitionDisarmed
-	case tpi.PartitionStateBusy:
+	case site.PartitionStateBusy:
 		return tpi.ServerCodePartitionBusy
 	}
 
@@ -162,11 +162,11 @@ func partitionStateToServerCode(state tpi.PartitionState) tpi.ServerCode {
 //
 // The system will stay in alarm state until a corresponding call
 // to restoreAlarm is made
-func (ctrl *controller) triggerAlarm(t tpi.AlarmType, partID string, zoneID string) error {
+func (ctrl *controller) triggerAlarm(t site.AlarmType, partID string, zoneID string) error {
 
 	s := ctrl.state
 
-	a := &tpi.Alarm{
+	a := site.Alarm{
 		AlarmType:   t,
 		PartitionID: partID,
 		ZoneID:      zoneID,
@@ -174,11 +174,11 @@ func (ctrl *controller) triggerAlarm(t tpi.AlarmType, partID string, zoneID stri
 	}
 
 	//prevent dupes
-	if a2, _ := s.findUnrestoredAlarm(a); a2 != nil {
+	if a2, _ := s.findUnrestoredAlarm(a); a2.AlarmType != "" {
 		return fmt.Errorf("alarm already triggered")
 	}
 
-	if a.AlarmType == tpi.AlarmTypePartition {
+	if a.AlarmType == site.AlarmTypePartition {
 		if a.PartitionID == "" || a.ZoneID == "" {
 			return fmt.Errorf("partitionID and zoneID are required for alarm of type %v", a.AlarmType)
 		}
@@ -203,12 +203,12 @@ func (ctrl *controller) triggerAlarm(t tpi.AlarmType, partID string, zoneID stri
 	return nil
 }
 
-func (ctrl *controller) processAlarm(a *tpi.Alarm) ([]tpi.ServerMessage, error) {
+func (ctrl *controller) processAlarm(a site.Alarm) ([]tpi.ServerMessage, error) {
 	//for partition alarms we need to send partition, zone alarm, and trigger the trouble led
 	msgs := make([]tpi.ServerMessage, 0, 3)
 
 	switch a.AlarmType {
-	case tpi.AlarmTypePartition:
+	case site.AlarmTypePartition:
 		msgs = append(msgs,
 			tpi.ServerMessage{
 				Code: tpi.ServerCodePartitionInAlarm,
@@ -223,15 +223,15 @@ func (ctrl *controller) processAlarm(a *tpi.Alarm) ([]tpi.ServerMessage, error) 
 				Data: []byte(a.PartitionID),
 			},
 		)
-	case tpi.AlarmTypeDuress:
+	case site.AlarmTypeDuress:
 		msgs = append(msgs, tpi.ServerMessage{Code: tpi.ServerCodeDuressAlarm})
-	case tpi.AlarmTypeFire:
+	case site.AlarmTypeFire:
 		msgs = append(msgs, tpi.ServerMessage{Code: tpi.ServerCodeFireAlarm})
-	case tpi.AlarmTypeAux:
+	case site.AlarmTypeAux:
 		msgs = append(msgs, tpi.ServerMessage{Code: tpi.ServerCodeAuxillaryAlarm})
-	case tpi.AlarmTypeSmokeOrAux:
+	case site.AlarmTypeSmokeOrAux:
 		msgs = append(msgs, tpi.ServerMessage{Code: tpi.ServerCodeSmokeOrAuxAlarm})
-	case tpi.AlarmTypePanic:
+	case site.AlarmTypePanic:
 		msgs = append(msgs, tpi.ServerMessage{Code: tpi.ServerCodePanicAlarm})
 	default:
 		return nil, fmt.Errorf("Invalid alarm type %v", a.AlarmType)
@@ -248,11 +248,11 @@ func (ctrl *controller) processAlarm(a *tpi.Alarm) ([]tpi.ServerMessage, error) 
 // Instead it will be removed later by a cleanup goroutine.
 // This is so that the alarm lingers and can be seen by clients that
 // were not connected at the precise moment it occurred.
-func (ctrl *controller) restoreAlarm(t tpi.AlarmType, partID string) error {
+func (ctrl *controller) restoreAlarm(t site.AlarmType, partID string) error {
 
 	s := ctrl.state
 
-	a, err := s.findUnrestoredAlarm(&tpi.Alarm{AlarmType: t, PartitionID: partID})
+	a, err := s.findUnrestoredAlarm(site.Alarm{AlarmType: t, PartitionID: partID})
 	if err != nil {
 		return err
 	}
@@ -269,12 +269,12 @@ func (ctrl *controller) restoreAlarm(t tpi.AlarmType, partID string) error {
 	return nil
 }
 
-func (ctrl *controller) processAlarmRestore(a *tpi.Alarm) ([]tpi.ServerMessage, error) {
+func (ctrl *controller) processAlarmRestore(a site.Alarm) ([]tpi.ServerMessage, error) {
 	//for partition alarms we need to send partition, zone alarm, and trigger the trouble led
 	msgs := make([]tpi.ServerMessage, 0, 3)
 
 	switch a.AlarmType {
-	case tpi.AlarmTypePartition:
+	case site.AlarmTypePartition:
 
 		part, _ := ctrl.state.findPartition(a.PartitionID)
 		var troubleLedCode tpi.ServerCode
@@ -298,14 +298,14 @@ func (ctrl *controller) processAlarmRestore(a *tpi.Alarm) ([]tpi.ServerMessage, 
 				Data: []byte(a.PartitionID),
 			},
 		)
-	case tpi.AlarmTypeDuress: //no restore msg
-	case tpi.AlarmTypeFire:
+	case site.AlarmTypeDuress: //no restore msg
+	case site.AlarmTypeFire:
 		msgs = append(msgs, tpi.ServerMessage{Code: tpi.ServerCodeFireAlarmRestore})
-	case tpi.AlarmTypeAux:
+	case site.AlarmTypeAux:
 		msgs = append(msgs, tpi.ServerMessage{Code: tpi.ServerCodeAuxillaryAlarmRestore})
-	case tpi.AlarmTypeSmokeOrAux:
+	case site.AlarmTypeSmokeOrAux:
 		msgs = append(msgs, tpi.ServerMessage{Code: tpi.ServerCodeSmokeOrAuxAlarmRestore})
-	case tpi.AlarmTypePanic:
+	case site.AlarmTypePanic:
 		msgs = append(msgs, tpi.ServerMessage{Code: tpi.ServerCodePanicAlarmRestore})
 
 	default:
@@ -316,7 +316,7 @@ func (ctrl *controller) processAlarmRestore(a *tpi.Alarm) ([]tpi.ServerMessage, 
 
 // processPartitionAlarmRestore resets the alarm state from the target zone and partition,
 // and return the relevant messages to send to the clients.
-func (ctrl *controller) processPartitionAlarmRestore(a *tpi.Alarm) ([]tpi.ServerMessage, error) {
+func (ctrl *controller) processPartitionAlarmRestore(a *site.Alarm) ([]tpi.ServerMessage, error) {
 	s := ctrl.state
 
 	part, err := s.findPartition(a.PartitionID)
@@ -324,14 +324,14 @@ func (ctrl *controller) processPartitionAlarmRestore(a *tpi.Alarm) ([]tpi.Server
 		return nil, err
 	}
 
-	part.State = tpi.PartitionStateReady
+	part.State = site.PartitionStateReady
 	part.TroubleStateLED = part.KeypadLEDState != 0 && part.KeypadLEDFlashState != 0
 
 	zone, err := s.findZone(a.ZoneID)
 	if err != nil {
 		return nil, err
 	}
-	zone.State = tpi.ZoneStateRestore
+	zone.State = site.ZoneStateRestore
 
 	var troubleLedCode tpi.ServerCode
 	if part.TroubleStateLED {
@@ -360,19 +360,19 @@ func (ctrl *controller) processPartitionAlarmRestore(a *tpi.Alarm) ([]tpi.Server
 
 // processPartitionLessAlarmRestore returns the relevent message that is sent
 // to the clients when the specifed alarm occurs
-func (ctrl *controller) processPartitionLessAlarmRestore(a *tpi.Alarm) ([]tpi.ServerMessage, error) {
+func (ctrl *controller) processPartitionLessAlarmRestore(a *site.Alarm) ([]tpi.ServerMessage, error) {
 	//simple case: just map the alarm type to the server code
 	var code tpi.ServerCode
 	switch a.AlarmType {
-	case tpi.AlarmTypeDuress:
+	case site.AlarmTypeDuress:
 		code = 0
-	case tpi.AlarmTypeFire:
+	case site.AlarmTypeFire:
 		code = tpi.ServerCodeFireAlarmRestore
-	case tpi.AlarmTypeAux:
+	case site.AlarmTypeAux:
 		code = tpi.ServerCodeAuxillaryAlarmRestore
-	case tpi.AlarmTypeSmokeOrAux:
+	case site.AlarmTypeSmokeOrAux:
 		code = tpi.ServerCodeSmokeOrAuxAlarmRestore
-	case tpi.AlarmTypePanic:
+	case site.AlarmTypePanic:
 		code = tpi.ServerCodePanicAlarmRestore
 	default:
 		return nil, fmt.Errorf("Invalid alarm type %v", a.AlarmType)
@@ -422,7 +422,7 @@ func (ctrl *controller) requestArm(mode tpi.ArmMode, partID string, userID strin
 		return nil, err
 	}
 
-	if part.State != tpi.PartitionStateReady {
+	if part.State != site.PartitionStateReady {
 		errCode := "24"
 		reply := tpi.ServerMessage{Code: tpi.ServerCodeSysErr, Data: []byte(errCode)}
 		return []tpi.ServerMessage{reply}, nil
@@ -433,7 +433,7 @@ func (ctrl *controller) requestArm(mode tpi.ArmMode, partID string, userID strin
 	return []tpi.ServerMessage{}, nil
 }
 
-func (ctrl *controller) arm(mode tpi.ArmMode, part *tpi.Partition, userID string, delay time.Duration) {
+func (ctrl *controller) arm(mode tpi.ArmMode, part site.Partition, userID string, delay time.Duration) {
 
 	ctrl.beginArm(part, userID, delay)
 
@@ -445,7 +445,7 @@ func (ctrl *controller) arm(mode tpi.ArmMode, part *tpi.Partition, userID string
 	}()
 }
 
-func (ctrl *controller) beginArm(part *tpi.Partition, userID string, delay time.Duration) {
+func (ctrl *controller) beginArm(part site.Partition, userID string, delay time.Duration) {
 	msgs := make([]tpi.ServerMessage, 0)
 	if delay > 0 {
 		msgs = append(msgs, tpi.ServerMessage{Code: tpi.ServerCodeExitDelayInProgress})
@@ -458,7 +458,7 @@ func (ctrl *controller) beginArm(part *tpi.Partition, userID string, delay time.
 	ctrl.broadcastMessagesToClients(msgs...)
 }
 
-func (ctrl *controller) completeArm(part *tpi.Partition, userID string, mode tpi.ArmMode) {
+func (ctrl *controller) completeArm(part site.Partition, userID string, mode tpi.ArmMode) {
 	msgs := make([]tpi.ServerMessage, 0)
 
 	if userID != "" {
@@ -466,7 +466,7 @@ func (ctrl *controller) completeArm(part *tpi.Partition, userID string, mode tpi
 		msgs = append(msgs, tpi.ServerMessage{Code: tpi.ServerCodeUserClosing, Data: data})
 	}
 
-	data := append(proto.EncodeIntCode(int(mode)), []byte(part.ID)...)
+	data := append(tpi.EncodeIntCode(int(mode)), []byte(part.ID)...)
 	msgs = append(msgs, tpi.ServerMessage{Code: tpi.ServerCodePartitionArmed, Data: data})
 
 	ctrl.state.armPartition(part)
@@ -476,6 +476,7 @@ func (ctrl *controller) completeArm(part *tpi.Partition, userID string, mode tpi
 
 func (ctrl *controller) processDisarm(msg tpi.ClientMessage) ([]tpi.ServerMessage, error) {
 
+	logger.Println("processing disarm", msg)
 	s := ctrl.state
 
 	partID := string(msg.Data[0])
@@ -484,7 +485,7 @@ func (ctrl *controller) processDisarm(msg tpi.ClientMessage) ([]tpi.ServerMessag
 		return nil, err
 	}
 
-	if part.State != tpi.PartitionStateArmed {
+	if part.State != site.PartitionStateArmed {
 		errCode := "23"
 		reply := tpi.ServerMessage{Code: tpi.ServerCodeSysErr, Data: []byte(errCode)}
 		return []tpi.ServerMessage{reply}, nil

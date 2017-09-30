@@ -1,4 +1,4 @@
-package mock
+package main
 
 import (
 	"encoding/json"
@@ -10,7 +10,8 @@ import (
 	"path"
 	"sync"
 	"time"
-	"tpi-mon/tpi"
+
+	"tpi-mon/pkg/site"
 )
 
 const eventExpireDelay = time.Second * 60
@@ -24,28 +25,31 @@ var errNoChange = errors.New("no change")
 type state struct {
 	stateFname string
 	writeLock  *sync.Mutex
+	password   string
 
-	Password      string
-	Users         map[string]string // PIN -> ID
-	Partitions    []*tpi.Partition
-	Zones         []*tpi.Zone
-	TroubleStatus tpi.SystemTroubleStatus
-	Alarms        []*tpi.Alarm
+	Users map[string]string // PIN -> ID
+	site.SystemState
+	// Partitions    []*site.Partition
+	// Zones         []*site.Zone
+	// TroubleStatus tpi.SystemTroubleStatus
+	// Alarms        []*site.Alarm
 }
 
 // creates a new state object from fname
-func newState(fname string) (*state, error) {
+func newState(password string, fname string) (*state, error) {
 
 	if !path.IsAbs(fname) {
 		cwd, err := os.Getwd()
 		if err != nil {
 			return nil, err
 		}
+		fmt.Println("fname is not abs:", fname, ". prepending cwd", cwd)
 		fname = path.Clean(path.Join(cwd, fname))
 	}
 
 	state := &state{
 		stateFname: fname,
+		password:   password,
 		writeLock:  &sync.Mutex{},
 	}
 
@@ -139,7 +143,7 @@ func (state *state) cleanupAlarms() error {
 	expiredIndices := make([]int, 0, len(state.Alarms))
 	for i, a := range state.Alarms {
 		if !a.Restored.IsZero() && a.Restored.Add(eventExpireDelay).Before(time.Now()) {
-			logger.Printf("Alarm %v has expired, removing\n", *a)
+			logger.Printf("Alarm %v has expired, removing\n", a)
 			expiredIndices = append(expiredIndices, i)
 		}
 	}
@@ -182,38 +186,38 @@ func (state *state) updateState(updater func() error) error {
 }
 
 // findPartition finds a partition by id
-func (state *state) findPartition(partID string) (*tpi.Partition, error) {
+func (state *state) findPartition(partID string) (site.Partition, error) {
 	for _, part := range state.Partitions {
 		if part.ID == partID {
 			return part, nil
 		}
 	}
-	return nil, fmt.Errorf("partition %v not found", partID)
+	return site.Partition{}, fmt.Errorf("partition %v not found", partID)
 }
 
 // findZone finds a zone by id
-func (state *state) findZone(zoneID string) (*tpi.Zone, error) {
+func (state *state) findZone(zoneID string) (site.Zone, error) {
 	for _, zone := range state.Zones {
 		if zone.ID == zoneID {
 			return zone, nil
 		}
 	}
-	return nil, fmt.Errorf("zone %v not found", zoneID)
+	return site.Zone{}, fmt.Errorf("zone %v not found", zoneID)
 }
 
 // processPartitionAlarm puts the target zone and partition in alarm state
 // and returns the relevant messages that must be sent to the client
-func (state *state) processAlarm(a *tpi.Alarm) error {
+func (state *state) processAlarm(a site.Alarm) error {
 
 	return state.updateState(func() error {
 
-		if a.AlarmType == tpi.AlarmTypePartition {
+		if a.AlarmType == site.AlarmTypePartition {
 			part, err := state.findPartition(a.PartitionID)
 			if err != nil {
 				return err
 			}
 
-			part.State = tpi.PartitionStateInAlarm
+			part.State = site.PartitionStateInAlarm
 			part.TroubleStateLED = true
 
 			zone, err := state.findZone(a.ZoneID)
@@ -221,7 +225,7 @@ func (state *state) processAlarm(a *tpi.Alarm) error {
 				return err
 			}
 
-			zone.State = tpi.ZoneStateAlarm
+			zone.State = site.ZoneStateAlarm
 		}
 
 		state.Alarms = append(state.Alarms, a)
@@ -230,13 +234,13 @@ func (state *state) processAlarm(a *tpi.Alarm) error {
 	})
 }
 
-func (state *state) processAlarmRestore(a *tpi.Alarm) error {
+func (state *state) processAlarmRestore(a site.Alarm) error {
 
 	return state.updateState(func() error {
 
 		a.Restored = time.Now()
 
-		if a.AlarmType == tpi.AlarmTypePartition {
+		if a.AlarmType == site.AlarmTypePartition {
 			part, err := state.findPartition(a.PartitionID)
 			if err != nil {
 				return err
@@ -245,9 +249,9 @@ func (state *state) processAlarmRestore(a *tpi.Alarm) error {
 			if err != nil {
 				return err
 			}
-			part.State = tpi.PartitionStateReady
+			part.State = site.PartitionStateReady
 			part.TroubleStateLED = part.KeypadLEDState != 0 && part.KeypadLEDFlashState != 0
-			zone.State = tpi.ZoneStateRestore
+			zone.State = site.ZoneStateRestore
 		}
 
 		return nil
@@ -256,25 +260,25 @@ func (state *state) processAlarmRestore(a *tpi.Alarm) error {
 }
 
 // findUnrestoredAlarm finds an unrestored alarm by type and partition
-func (state *state) findUnrestoredAlarm(a *tpi.Alarm) (*tpi.Alarm, error) {
+func (state *state) findUnrestoredAlarm(a site.Alarm) (site.Alarm, error) {
 	for _, a2 := range state.Alarms {
 		if a.AlarmType == a2.AlarmType && a.PartitionID == a2.PartitionID && a2.Restored.IsZero() {
 			return a2, nil
 		}
 	}
-	return nil, fmt.Errorf("alarm (%v,%v) not found", a.AlarmType, a.PartitionID)
+	return site.Alarm{}, fmt.Errorf("alarm (%v,%v) not found", a.AlarmType, a.PartitionID)
 }
 
-func (state *state) armPartition(part *tpi.Partition) error {
+func (state *state) armPartition(part site.Partition) error {
 	return state.updateState(func() error {
-		part.State = tpi.PartitionStateArmed
+		part.State = site.PartitionStateArmed
 		return nil
 	})
 }
 
-func (state *state) disarmPartition(part *tpi.Partition) error {
+func (state *state) disarmPartition(part site.Partition) error {
 	return state.updateState(func() error {
-		part.State = tpi.PartitionStateReady
+		part.State = site.PartitionStateReady
 		return nil
 	})
 }

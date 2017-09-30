@@ -1,4 +1,4 @@
-package proto
+package tpi
 
 import (
 	"bytes"
@@ -10,19 +10,19 @@ import (
 
 var crlf = []byte("\r\n")
 
-// TPIMessage represents a TPI server or client message
-type TPIMessage struct {
+// message represents a generic Envisalink TPI message
+type message struct {
 	Code int
 	Data []byte
 }
 
-func (msg TPIMessage) Write(w io.Writer) error {
+func writeMessage(msg message, w io.Writer) error {
 	msgBytes := msg.encode()
 	_, err := w.Write(msgBytes)
 	return err
 }
 
-func (msg TPIMessage) encode() []byte {
+func (msg message) encode() []byte {
 	encoded := EncodeIntCode(msg.Code)
 
 	if msg.Data != nil {
@@ -35,21 +35,20 @@ func (msg TPIMessage) encode() []byte {
 }
 
 // ReadAvailableMessages reads all available messages from the supplied reader
-func ReadAvailableMessages(reader io.Reader) ([]TPIMessage, error) {
+func readAvailableMessages(reader io.Reader) ([]message, error) {
 
 	packetBytes, err := readUntilMarker(reader, crlf)
 	if err != nil {
 		return nil, err
 	}
 	packets := bytes.Split(packetBytes, crlf)
-	msgs := make([]TPIMessage, 0, len(packets))
+	msgs := make([]message, 0, len(packets))
 	for _, packet := range packets {
 		if len(packet) > 0 {
 			msg, err := msgDecode(packet)
 			if err != nil {
 				return nil, err
 			}
-			// fmt.Printf("Received %v (raw: %v)\n", msg, packet)
 			msgs = append(msgs, msg)
 		}
 	}
@@ -80,28 +79,34 @@ func readUntilMarker(reader io.Reader, marker []byte) ([]byte, error) {
 	return data, nil
 }
 
-func msgDecode(msgBytes []byte) (TPIMessage, error) {
+func msgDecode(msgBytes []byte) (message, error) {
 	if len(msgBytes) < 5 {
-		return TPIMessage{}, fmt.Errorf("Got %d bytes, need at least 5", len(msgBytes))
+		return message{}, fmt.Errorf("Got %d bytes, need at least 5", len(msgBytes))
 	}
+
+	// CODE-DATA-CHECKSUM
+	// code: 3 bytes
+	// data: 0-n bytes
+	// checksum: 2 bytes
 
 	dataStart := 3
 	dataEnd := len(msgBytes) - 2
 	codeBytes := msgBytes[:dataStart]
 	data := msgBytes[dataStart:dataEnd]
 	expectedChecksum := string(msgBytes[dataEnd:])
+	// verify checksum
 	actualChecksum := msgChecksum(msgBytes[:dataEnd])
 	if strings.ToLower(expectedChecksum) != strings.ToLower(actualChecksum) {
-		return TPIMessage{}, fmt.Errorf("failed to decode message %v: data %v, expected checksum %v, actual %v",
+		return message{}, fmt.Errorf("failed to decode message %v: data %v, expected checksum %v, actual %v",
 			msgBytes, data, expectedChecksum, actualChecksum)
 	}
 
 	code, err := DecodeIntCode(codeBytes)
 	if err != nil {
-		return TPIMessage{}, err
+		return message{}, err
 	}
 
-	msg := TPIMessage{
+	msg := message{
 		Code: code,
 		Data: data,
 	}

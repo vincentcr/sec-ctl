@@ -1,10 +1,8 @@
-package mock
+package main
 
 import (
-	"io"
 	"net"
-	"tpi-mon/tpi"
-	"tpi-mon/tpi/proto"
+	"tpi-mon/pkg/tpi"
 )
 
 type clientSession struct {
@@ -43,7 +41,7 @@ func (s *clientSession) startReadLoop() {
 		defer s.conn.Close()
 
 		for {
-			msgs, err := readAvailableClientMessages(s.conn)
+			msgs, err := tpi.ReadAvailableClientMessages(s.conn)
 			if err != nil {
 				logger.Println("read error:", err)
 				break
@@ -69,33 +67,13 @@ func (s *clientSession) startWriteLoop() {
 			select {
 			case m := <-s.writeCh:
 				logger.Println("write:", m)
-				err := writeServerMessage(m, s.conn)
+				err := m.Write(s.conn)
 				if err != nil {
 					logger.Println("write error:", err)
 				}
 			}
 		}
 	}()
-}
-
-func readAvailableClientMessages(r io.Reader) ([]tpi.ClientMessage, error) {
-
-	msgs, err := proto.ReadAvailableMessages(r)
-	if err != nil {
-		return nil, err
-	}
-
-	clientMsgs := make([]tpi.ClientMessage, len(msgs))
-	for i, m := range msgs {
-		clientMsgs[i] = tpi.ClientMessage{Code: tpi.ClientCode(m.Code), Data: m.Data}
-	}
-
-	return clientMsgs, nil
-}
-
-func writeServerMessage(m tpi.ServerMessage, w io.Writer) error {
-	tpiM := proto.TPIMessage{Code: int(m.Code), Data: m.Data}
-	return tpiM.Write(w)
 }
 
 func (s *clientSession) startProcessingLoop() {
@@ -174,7 +152,7 @@ func (s *clientSession) reply(msg tpi.ClientMessage, replies ...tpi.ServerMessag
 	}
 	s.writeCh <- tpi.ServerMessage{
 		Code: tpi.ServerCodeAck,
-		Data: proto.EncodeIntCode(int(msg.Code)),
+		Data: tpi.EncodeIntCode(int(msg.Code)),
 	}
 
 	return nil
