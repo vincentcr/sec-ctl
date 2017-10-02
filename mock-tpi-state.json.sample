@@ -1,0 +1,49 @@
+{
+  "Users": {
+    "1234": "0001"
+  },
+  "ID": "",
+  "Partitions": [
+    {
+      "ID": "1",
+      "State": "Armed",
+      "TroubleStateLED": false,
+      "KeypadLEDFlashState": 0,
+      "KeypadLEDState": 0
+    },
+    {
+      "ID": "2",
+      "State": "Ready",
+      "TroubleStateLED": false,
+      "KeypadLEDFlashState": 0,
+      "KeypadLEDState": 0
+    },
+    {
+      "ID": "3",
+      "State": "Busy",
+      "TroubleStateLED": false,
+      "KeypadLEDFlashState": 0,
+      "KeypadLEDState": 0
+    }
+  ],
+  "Zones": [
+    {
+      "ID": "001",
+      "State": "Restore"
+    },
+    {
+      "ID": "002",
+      "State": "Restore"
+    },
+    {
+      "ID": "003",
+      "State": "Restore"
+    },
+    {
+      "ID": "004",
+      "State": "Restore"
+    }
+  ],
+  "Alarms": [],
+  "TroubleStatus": 0
+}
