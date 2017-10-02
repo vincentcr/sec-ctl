@@ -45,9 +45,21 @@
 
 [[projects]]
   branch = "master"
+  name = "golang.org/x/net"
+  packages = ["context"]
+  revision = "0a9397675ba34b2845f758fe3cd68828369c6517"
+
+[[projects]]
+  branch = "master"
   name = "golang.org/x/sys"
   packages = ["unix"]
   revision = "429f518978ab01db8bb6f44b66785088e7fba58b"
+
+[[projects]]
+  branch = "master"
+  name = "golang.org/x/time"
+  packages = ["rate"]
+  revision = "6dc17368e09b0e8634d71cac8168d853e869a0c7"
 
 [[projects]]
   name = "gopkg.in/go-playground/validator.v8"
@@ -64,6 +76,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "77d3cabfb88c890df317492da07b66a258dcac53fc38104f99290288520bd02e"
+  inputs-digest = "451dbbdcc846e077fc2a7586515ad417c63f7a869b6df0c7dfcd0ed606da73d9"
   solver-name = "gps-cdcl"
   solver-version = 1
