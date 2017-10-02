@@ -19,5 +19,5 @@ services:
     environment:
       - Tpimon.Local.TPIHost=mock
       - Tpimon.Local.TPIPassword=mock123
-      - Tpimon.Local.CloudWSURL=ws://cloud:9754
+      - Tpimon.Local.CloudWSURL=ws://cloud:9754/ws
       - Tpimon.Local.CloudToken=cloud123
