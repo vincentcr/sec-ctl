@@ -10,17 +10,12 @@ import (
 
 type lookupClient func(id string) site.Client
 
-// Start stats the api with supplied tpi, and binding to supplied port
-func Start(lookupClient lookupClient, bindHost string, bindPort uint16, errCh chan error) {
+// Run stats the api with supplied tpi, and binding to supplied port
+func Run(lookupClient lookupClient, bindHost string, bindPort uint16) error {
 	g := gin.Default()
 	setupRoutes(g, lookupClient)
 	bindAddr := fmt.Sprintf("%s:%d", bindHost, bindPort)
-	go func() {
-		err := g.Run(bindAddr)
-		if err != nil {
-			errCh <- err
-		}
-	}()
+	return g.Run(bindAddr)
 }
 
 func setupRoutes(g *gin.Engine, lookupClient lookupClient) {
