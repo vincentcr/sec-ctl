@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"tpi-mon/pkg/site"
 	"tpi-mon/pkg/ws"
@@ -11,13 +12,11 @@ import (
 
 type server struct {
 	registry *clientRegistry
-	errCh    chan error
 }
 
-func startServer(bindHost string, bindPort uint16, errCh chan error) *server {
+func startServer(bindHost string, bindPort uint16) *server {
 	s := &server{
 		registry: newRegistry(),
-		errCh:    errCh,
 	}
 	go func() {
 		s.runWSServer(bindHost, bindPort)
@@ -31,23 +30,27 @@ func (s *server) runWSServer(bindHost string, bindPort uint16) {
 	addr := fmt.Sprintf("%s:%d", bindHost, bindPort)
 
 	r.GET("/ws", func(c *gin.Context) {
-		s.wshandler(c.Writer, c.Request)
+		if err := s.wshandler(c.Writer, c.Request); err != nil {
+			log.Println(err)
+			c.JSON(400, &gin.H{"error": "Unable to upgrade to web socket"})
+		}
 	})
 
 	err := r.Run(addr)
 	if err != nil {
-		s.errCh <- err
+		log.Panicln(err)
 	}
 }
 
-func (s *server) wshandler(w http.ResponseWriter, r *http.Request) {
+func (s *server) wshandler(w http.ResponseWriter, r *http.Request) error {
 
 	conn, err := ws.UpgradeRequest(w, r)
 	if err != nil {
-		s.errCh <- err
+		return err
 	}
 
 	initRemoteSite(conn, s.registry)
+	return nil
 }
 
 func (s *server) GetClient(id string) site.Client {

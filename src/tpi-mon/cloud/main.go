@@ -13,15 +13,6 @@ func main() {
 		log.Panicln(err)
 	}
 
-	errCh := make(chan error)
-	s := startServer(cfg.Cloud.WSBindHost, cfg.Cloud.WSBindPort, errCh)
-	rest.Start(s.GetClient, cfg.Cloud.RESTBindHost, cfg.Cloud.RESTBindPort, errCh)
-
-	for {
-		select {
-		case err := <-errCh:
-			log.Panicln(err)
-		}
-	}
-
+	s := startServer(cfg.Cloud.WSBindHost, cfg.Cloud.WSBindPort)
+	rest.Run(s.GetClient, cfg.Cloud.RESTBindHost, cfg.Cloud.RESTBindPort)
 }

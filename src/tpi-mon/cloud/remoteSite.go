@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"io"
+	"log"
 	"tpi-mon/pkg/site"
 	"tpi-mon/pkg/ws"
 )
@@ -76,9 +76,7 @@ func (c *remoteSite) send(obj interface{}) {
 
 func (c *remoteSite) handleConnErr(err error) {
 	c.registry.removeClient(c)
-	if err != io.EOF {
-		panic(err) //todo: can do better than this LOL
-	}
+	log.Println("client disconnected:", err)
 }
 
 func (c *remoteSite) Exec(cmd site.UserCommand) error {
