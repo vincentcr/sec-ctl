@@ -1,6 +1,0 @@
-
-http:
-  port: 2345
-
-envisalink:
-  host: '192.168.86.12'
