@@ -3,8 +3,6 @@ package main
 import (
 	"encoding/hex"
 	"fmt"
-	"net"
-	"sync"
 	"time"
 	"tpi-mon/pkg/site"
 	"tpi-mon/pkg/tpi"
@@ -19,11 +17,7 @@ type localClient struct {
 	password string
 	id       string
 
-	conn           *net.TCPConn
-	readCh         chan tpi.ServerMessage
-	writeCh        chan tpi.ClientMessage
-	writeCond      *sync.Cond
-	msgsPendingAck []tpi.ClientCode
+	conn           *localClientConnector
 	partitions     map[string]*site.Partition
 	zones          map[string]*site.Zone
 	eventChs       []chan site.Event
@@ -34,44 +28,21 @@ type localClient struct {
 }
 
 // NewLocalClient creates a new local client, from the supplied local server info
-func newLocalClient(hostname string, port uint16, password string, errorCh chan error) site.Client {
+func newLocalClient(hostname string, port uint16, password string) site.Client {
+
 	c := &localClient{
 		id:             "1",
+		password:       password,
 		partitions:     map[string]*site.Partition{},
 		zones:          map[string]*site.Zone{},
-		readCh:         make(chan tpi.ServerMessage),
-		writeCh:        make(chan tpi.ClientMessage),
-		writeCond:      sync.NewCond(&sync.Mutex{}),
 		eventChs:       make([]chan site.Event, 0),
 		stateChangeChs: make([]chan site.StateChange, 0),
-		errorCh:        errorCh,
-		msgsPendingAck: make([]tpi.ClientCode, 0, maxPendingMessages),
 	}
-	if err := c.connect(hostname, port, password); err != nil {
-		errorCh <- err
-		return nil
-	}
+
+	c.conn = newLocalConnection(hostname, port, c.processMessage)
+	c.startTimersLoop()
+
 	return c
-}
-
-func (c *localClient) connect(hostname string, port uint16, password string) error {
-	c.password = password
-	servAddr := fmt.Sprintf("%s:%d", hostname, port)
-	tcpAddr, err := net.ResolveTCPAddr("tcp", servAddr)
-	if err != nil {
-		return err
-	}
-
-	conn, err := net.DialTCP("tcp", nil, tcpAddr)
-	if err != nil {
-		return err
-	}
-	c.conn = conn
-	c.startReadLoop()
-	c.startWriteLoop()
-	c.startProcessingLoop()
-
-	return nil
 }
 
 func (c *localClient) SubscribeToEvents() chan site.Event {
@@ -96,21 +67,17 @@ func (c *localClient) GetState() site.SystemState {
 }
 
 func (c *localClient) getPartitions() []site.Partition {
-	parts := make([]site.Partition, len(c.partitions))
-	idx := 0
+	parts := make([]site.Partition, 0, len(c.partitions))
 	for _, p := range c.partitions {
-		parts[idx] = *p
-		idx++
+		parts = append(parts, *p)
 	}
 	return parts
 }
 
 func (c *localClient) getZones() []site.Zone {
-	zones := make([]site.Zone, len(c.zones))
-	idx := 0
-	for _, p := range c.zones {
-		zones[idx] = *p
-		idx++
+	zones := make([]site.Zone, 0, len(c.zones))
+	for _, z := range c.zones {
+		zones = append(zones, *z)
 	}
 	return zones
 }
@@ -142,39 +109,15 @@ func (c *localClient) Exec(cmd site.UserCommand) error {
 		panic(fmt.Errorf("Unhandled user command %#v", cmd))
 	}
 
-	c.sendMessage(msg)
+	c.enqueueMessage(msg)
 	return nil
 }
 
-func (c *localClient) startWriteLoop() {
-	go func() {
-		for {
-			select {
-			case msg := <-c.writeCh:
-				err := msg.Write(c.conn)
-				if err != nil {
-					c.errorCh <- fmt.Errorf("write error: %v", err.Error())
-				}
-			}
-		}
-	}()
+func (c *localClient) enqueueMessage(msg tpi.ClientMessage) {
+	c.conn.enqueueMessage(msg)
 }
 
-func (c *localClient) startReadLoop() {
-	go func() {
-		for {
-			msgs, err := tpi.ReadAvailableServerMessages(c.conn)
-			for _, msg := range msgs {
-				c.readCh <- msg
-			}
-			if err != nil {
-				c.errorCh <- fmt.Errorf("read error: %v", err.Error())
-			}
-		}
-	}()
-}
-
-func (c *localClient) startProcessingLoop() {
+func (c *localClient) startTimersLoop() {
 	go func() {
 		tickKeepAlive := time.Tick(keepAliveDelay)
 		tickStateRefreshDelay := time.Tick(stateRefreshDelay)
@@ -185,8 +128,6 @@ func (c *localClient) startProcessingLoop() {
 				c.poll()
 			case <-tickStateRefreshDelay:
 				c.requestStateRefresh()
-			case msg := <-c.readCh:
-				c.processServerMessage(msg)
 			}
 		}
 	}()
@@ -194,56 +135,26 @@ func (c *localClient) startProcessingLoop() {
 
 func (c *localClient) poll() {
 	if c.loggedIn {
-		c.sendMessage(tpi.ClientMessage{Code: tpi.ClientCodePoll})
+		c.enqueueMessage(tpi.ClientMessage{Code: tpi.ClientCodePoll})
 	}
 }
 
 func (c *localClient) requestStateRefresh() {
 	if c.loggedIn {
-		c.sendMessage(tpi.ClientMessage{Code: tpi.ClientCodeStatusReport})
+		c.enqueueMessage(tpi.ClientMessage{Code: tpi.ClientCodeStatusReport})
 	}
 }
 
-func (c *localClient) sendMessage(msg tpi.ClientMessage) {
-	c.writeCond.L.Lock()
-	for len(c.msgsPendingAck) == maxPendingMessages {
-		c.writeCond.Wait()
-	}
-	c.msgsPendingAck = append(c.msgsPendingAck, msg.Code)
-	c.writeCond.L.Unlock()
-	c.writeCh <- msg
-}
+func (c *localClient) processMessage(i interface{}) error {
 
-func (c *localClient) processAck(msg tpi.ServerMessage) {
+	msg := i.(tpi.ServerMessage)
 
-	codeInt, err := tpi.DecodeIntCode(msg.Data)
-	if err != nil {
-		panic(fmt.Errorf("failed to decode code for msg %v: %v", msg, err))
-	}
-
-	code := tpi.ClientCode(codeInt)
-
-	for i, expectedCode := range c.msgsPendingAck {
-		if expectedCode == code {
-			c.writeCond.L.Lock()
-			c.msgsPendingAck = append(c.msgsPendingAck[:i], c.msgsPendingAck[i+1:]...)
-			c.writeCond.L.Unlock()
-			c.writeCond.Signal()
-			return
-		}
-	}
-
-	panic(fmt.Errorf("Unexpected ack for %v. pending: %v", msg, c.msgsPendingAck))
-}
-
-func (c *localClient) processServerMessage(msg tpi.ServerMessage) error {
 	switch msg.Code {
-
-	case tpi.ServerCodeAck:
-		c.processAck(msg)
 
 	case tpi.ServerCodeLoginRes:
 		c.processLoginResult(msg)
+
+	case tpi.ServerCodeAck: // ignore
 
 	case tpi.ServerCodeSysErr:
 		c.processSystemError(msg)
@@ -334,6 +245,7 @@ func (c *localClient) publishStateChange(chgType site.StateChangeType, data inte
 		}
 	}()
 }
+
 func (c *localClient) processPartitionEvent(level site.EventLevel, msg tpi.ServerMessage) {
 	partID := string(msg.Data)
 	c.publishEvent(newServerEvent(level, msg.Code).SetPartitionID(partID))
@@ -358,7 +270,7 @@ func (c *localClient) processLoginResult(msg tpi.ServerMessage) {
 			Code: tpi.ClientCodeNetworkLogin,
 			Data: []byte(c.password),
 		}
-		c.sendMessage(loginMsg)
+		c.enqueueMessage(loginMsg)
 	}
 }
 

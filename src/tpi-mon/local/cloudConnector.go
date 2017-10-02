@@ -2,51 +2,51 @@ package main
 
 import (
 	"fmt"
-	"log"
-	"math"
-	"math/rand"
 	"sync"
 	"time"
 	"tpi-mon/pkg/site"
 	"tpi-mon/pkg/ws"
+
+	"golang.org/x/time/rate"
 )
 
-type connState byte
-
-const (
-	connStateDisconnected connState = iota
-	connStateConnecting
-	connStateConnected
-)
+const writeBurstLimit = 128
+const writeRateLimit = 128 * time.Millisecond
 
 // cloudConnector connects the local tpi client with a remote cloud
 type cloudConnector struct {
-	url        string
-	token      string
 	connState  connState
-	conn       *ws.Conn
+	connMgr    *connectionManager
 	siteClient site.Client
-	sendQueue  []interface{}
 
-	sendCh        chan interface{}
-	doneCh        chan struct{}
-	loopsWg       sync.WaitGroup
+	sendQueue     *workQueue
+	recvQueue     *workQueue
+	writeLimiter  *rate.Limiter
 	connStateLock sync.Cond
 }
 
 func startCloudConnector(url string, token string, siteClient site.Client) {
 
 	c := &cloudConnector{
-		siteClient: siteClient,
-		url:        url,
-		token:      token,
-		sendCh:     make(chan interface{}),
+		siteClient:   siteClient,
+		writeLimiter: rate.NewLimiter(rate.Limit(1024), 256),
 	}
+
+	c.connMgr = newConnectionManager("cloud", func() (interface{}, error) {
+		return ws.Dial(url, token)
+	})
+
+	c.sendQueue = newWorkQueue(c.sendMessage)
+	c.recvQueue = newWorkQueue(c.recvMessage)
 
 	c.subscribeToTpiEvents()
 
 	go func() {
-		c.connect()
+		c.connMgr.connect()
+		c.connMgr.startReconnectLoop()
+		c.startReadLoop()
+		c.sendQueue.start()
+		c.recvQueue.start()
 	}()
 }
 
@@ -67,109 +67,36 @@ func (c *cloudConnector) subscribeToTpiEvents() {
 	}()
 }
 
-func (c *cloudConnector) connect() {
-	for n := 0.0; c.conn == nil; n++ {
-		if !c.attemptConnect() {
-			c.backoff(n)
-		}
-	}
-	c.startReadLoop()
-	c.startWriteLoop()
-}
-
-func (c *cloudConnector) attemptConnect() bool {
-	conn, err := ws.Dial(c.url, c.token)
-	if err != nil {
-		log.Printf("Failed to connect to %v: %v\n", c.url, err)
-		return false
-	}
-
-	c.conn = conn
-	return true
-}
-
-func (c *cloudConnector) backoff(n float64) {
-	// 0 -> [250ms, 500ms]
-	// 1 -> [500ms, 1000ms]
-	// 2 -> [1000ms, 2000ms]
-	// ...
-	// 8 ... n -> [64s, 128s]
-	backoffFactor := math.Pow(2, math.Min(8.0, n))
-	baseDelay := 250 * time.Millisecond
-	backoff := time.Duration(backoffFactor+rand.Float64()*backoffFactor) * baseDelay
-	log.Printf("reconnect backoff %v => %v\n", n, backoff)
-	time.Sleep(backoff)
-}
-
-func (c *cloudConnector) signalConnErr(err error) {
-	log.Printf("Connection error with %v: %v\n", c.url, err)
-	c.connStateLock.L.Lock()
-	defer c.connStateLock.L.Unlock()
-	if c.connState != connStateConnecting {
-		c.connState = connStateDisconnected
-	}
-	c.connStateLock.Signal()
-}
-
-func (c *cloudConnector) reconnectLoop() {
-
-	for {
-		c.connStateLock.L.Lock()
-		for c.connState == connStateConnected {
-			c.connStateLock.Wait()
-		}
-		c.connState = connStateConnecting
-		c.connStateLock.L.Unlock()
-
-		c.stop()
-		c.connect()
-
-		c.connStateLock.L.Lock()
-		c.connState = connStateConnected
-		c.connStateLock.L.Unlock()
-	}
-
-}
-
-func (c *cloudConnector) stop() {
-	if c.conn != nil {
-		if err := c.conn.Close(); err != nil {
-			log.Println("error closing connection:", err)
-		}
-		c.conn = nil
-	}
-	c.doneCh <- struct{}{}
-	c.loopsWg.Wait()
-}
-
 func (c *cloudConnector) startReadLoop() {
 
 	go func() {
-
-		c.loopsWg.Add(1)
-		defer c.loopsWg.Done()
-
 		for {
-			i, err := c.conn.Read()
+
+			conn := c.connMgr.conn.(*ws.Conn)
+
+			o, err := conn.Read()
 			if err != nil {
-				c.signalConnErr(err)
-				break
+				c.connMgr.signalConnErrAndWaitReconnected(err)
+			} else {
+				c.recvQueue.enqueue(o)
 			}
-
-			switch o := i.(type) {
-			case site.UserCommand:
-				c.processUserCommand(o)
-			case ws.ControlMessage:
-				c.processControlMessage(o)
-			default:
-				panic(fmt.Errorf("Unexpected message: %#v", i))
-			}
-
 		}
 	}()
 }
 
-func (c *cloudConnector) processUserCommand(cmd site.UserCommand) {
+func (c *cloudConnector) recvMessage(i interface{}) error {
+	switch o := i.(type) {
+	case site.UserCommand:
+		c.recvUserCommand(o)
+	case ws.ControlMessage:
+		c.recvControlMessage(o)
+	default:
+		panic(fmt.Errorf("Unexpected message: %#v", i))
+	}
+	return nil
+}
+
+func (c *cloudConnector) recvUserCommand(cmd site.UserCommand) {
 	if err := c.siteClient.Exec(cmd); err != nil {
 
 		e := site.Event{
@@ -182,7 +109,7 @@ func (c *cloudConnector) processUserCommand(cmd site.UserCommand) {
 	}
 }
 
-func (c *cloudConnector) processControlMessage(msg ws.ControlMessage) {
+func (c *cloudConnector) recvControlMessage(msg ws.ControlMessage) {
 	switch msg.Code {
 	case ws.CtrlGetState:
 		st := c.siteClient.GetState()
@@ -193,56 +120,23 @@ func (c *cloudConnector) processControlMessage(msg ws.ControlMessage) {
 }
 
 func (c *cloudConnector) enqueueMessage(msg interface{}) {
-	c.sendCh <- msg
+	c.sendQueue.enqueue(msg)
 }
 
-func (c *cloudConnector) startWriteLoop() {
-	go func() {
-		c.loopsWg.Add(1)
-		defer c.loopsWg.Done()
+func (c *cloudConnector) sendMessage(msg interface{}) error {
 
-		c.drainSendQueue()
+	r := c.writeLimiter.Reserve()
+	if !r.OK() {
+		panic("not allowed to request a burst of 1")
+	}
+	time.Sleep(r.Delay())
 
-		for {
-			select {
-			case <-c.doneCh:
-				break
-			case o := <-c.sendCh:
-				if o != nil {
-					c.sendQueue = append(c.sendQueue, o)
-				}
-				c.drainSendQueue()
-			}
-		}
+	conn := c.connMgr.conn.(*ws.Conn)
 
-	}()
-}
-
-// drainSendQueue will send all queued messages
-func (c *cloudConnector) drainSendQueue() {
-	ok := true
-	n := 0
-	for ok && n < len(c.sendQueue) {
-		o := c.sendQueue[n]
-		ok = c.sendMessage(o)
-		if ok {
-			n++
-		}
+	err := conn.Write(msg)
+	if err != nil { // todo: try to separate io errors from others
+		c.connMgr.signalConnErrAndWaitReconnected(err)
 	}
 
-	if n > 0 {
-		c.sendQueue = c.sendQueue[n:]
-	}
-}
-
-func (c *cloudConnector) sendMessage(msg interface{}) bool {
-	if c.conn == nil {
-		return false
-	}
-
-	err := c.conn.Write(msg)
-	if err != nil {
-		c.signalConnErr(err)
-	}
-	return err != nil
+	return nil
 }
