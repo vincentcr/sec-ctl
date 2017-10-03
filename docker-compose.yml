@@ -7,9 +7,13 @@ services:
       - "./mock-tpi-state.json:/mock-tpi-state.json"
     environment:
       - "Tpimon.Mock.StateFilePath=/mock-tpi-state.json"
+    ports:
+      - 9751:9751
 
   tpi-mon-cloud:
     image: tpi-mon-cloud
+    ports:
+      - 9753:9753
 
   tpi-mon-local:
     image: tpi-mon-local
@@ -21,3 +25,5 @@ services:
       - Tpimon.Local.TPIPassword=mock123
       - Tpimon.Local.CloudWSURL=ws://cloud:9754/ws
       - Tpimon.Local.CloudToken=cloud123
+    ports:
+      - 9752:9752
