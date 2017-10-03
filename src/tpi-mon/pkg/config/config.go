@@ -22,7 +22,7 @@ var defaultConfig = Config{
 		TPIBindPort:   4025,
 		RESTBindPort:  9751,
 		Password:      "mock123",
-		StateFilePath: "mock-tpi-state.json",
+		StateFilename: "mock-tpi-state.json",
 	},
 }
 
@@ -64,5 +64,5 @@ type mockConfig struct {
 	TPIBindPort   uint16
 	RESTBindPort  uint16
 	Password      string
-	StateFilePath string
+	StateFilename string
 }

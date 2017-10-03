@@ -14,7 +14,7 @@ func main() {
 		log.Panicln(err)
 	}
 
-	if err = Run(cfg.Mock.BindHost, cfg.Mock.TPIBindPort, cfg.Mock.RESTBindPort, cfg.Mock.Password, cfg.Mock.StateFilePath); err != nil {
+	if err = Run(cfg.Mock.BindHost, cfg.Mock.TPIBindPort, cfg.Mock.RESTBindPort, cfg.Mock.Password, cfg.Mock.StateFilename); err != nil {
 		log.Panicln(err)
 	}
 }

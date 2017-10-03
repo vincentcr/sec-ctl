@@ -35,20 +35,20 @@ type state struct {
 	// Alarms        []*site.Alarm
 }
 
-// creates a new state object from fname
-func newState(password string, fname string) (*state, error) {
+// creates a new state object from stateFilename
+func newState(password string, stateFilename string) (*state, error) {
 
-	if !path.IsAbs(fname) {
+	if !path.IsAbs(stateFilename) {
 		cwd, err := os.Getwd()
 		if err != nil {
 			return nil, err
 		}
-		fmt.Println("fname is not abs:", fname, ". prepending cwd", cwd)
-		fname = path.Clean(path.Join(cwd, fname))
+		fmt.Println("stateFilename is not abs:", stateFilename, ". prepending cwd", cwd)
+		stateFilename = path.Clean(path.Join(cwd, stateFilename))
 	}
 
 	state := &state{
-		stateFname: fname,
+		stateFname: stateFilename,
 		password:   password,
 		writeLock:  &sync.Mutex{},
 	}

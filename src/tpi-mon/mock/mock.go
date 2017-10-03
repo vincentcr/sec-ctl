@@ -9,9 +9,9 @@ import (
 )
 
 // Run creates a new mock server
-func Run(bindHost string, tpiBindPort uint16, restBindPort uint16, password string, stateFile string) error {
+func Run(bindHost string, tpiBindPort uint16, restBindPort uint16, password string, stateFilename string) error {
 
-	state, err := newState(password, stateFile)
+	state, err := newState(password, stateFilename)
 	if err != nil {
 		return err
 	}
