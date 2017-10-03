@@ -1,8 +1,6 @@
 package main
 
 import (
-	"fmt"
-	"log"
 	"tpi-mon/pkg/site"
 	"tpi-mon/pkg/ws"
 )
@@ -61,7 +59,7 @@ func (c *remoteSite) readLoop() {
 		case site.Event:
 			c.processEvent(o)
 		default:
-			panic(fmt.Errorf("Unexpected message: %#v", i))
+			logger.Panicf("Unexpected message: %#v", i)
 		}
 
 	}
@@ -76,7 +74,7 @@ func (c *remoteSite) send(obj interface{}) {
 
 func (c *remoteSite) handleConnErr(err error) {
 	c.registry.removeClient(c)
-	log.Println("client disconnected:", err)
+	logger.Println("client disconnected:", err)
 }
 
 func (c *remoteSite) Exec(cmd site.UserCommand) error {
@@ -127,7 +125,7 @@ func (c *remoteSite) processStateChange(chg site.StateChange) {
 	case site.StateChangeSystemTroubleStatus:
 		c.updateSystemTroubleStatus(chg.Data.(site.SystemTroubleStatus))
 	default:
-		panic(fmt.Errorf("Unhandled state change: %v", chg))
+		logger.Panicf("Unhandled state change: %v", chg)
 	}
 }
 

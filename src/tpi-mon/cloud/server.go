@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"tpi-mon/pkg/site"
 	"tpi-mon/pkg/ws"
@@ -31,14 +30,14 @@ func (s *server) runWSServer(bindHost string, bindPort uint16) {
 
 	r.GET("/ws", func(c *gin.Context) {
 		if err := s.wshandler(c.Writer, c.Request); err != nil {
-			log.Println(err)
+			logger.Println("Unable to upgrade request to websocket:", err)
 			c.JSON(400, &gin.H{"error": "Unable to upgrade to web socket"})
 		}
 	})
 
 	err := r.Run(addr)
 	if err != nil {
-		log.Panicln(err)
+		logger.Panicln(err)
 	}
 }
 

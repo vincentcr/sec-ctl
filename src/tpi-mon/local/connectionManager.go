@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"math"
 	"math/rand"
 	"sync"
@@ -41,14 +40,15 @@ func (mgr *connectionManager) connect() {
 		conn, err := mgr.attemptConnect()
 
 		if err != nil {
-			mgr.log("connection attempt failed: %v", err)
 			mgr.backoff(n)
 		} else {
-			mgr.log("connected")
-			mgr.conn = conn
+			logger.Printf("%s: connected", mgr.name)
 			mgr.connStateLock.L.Lock()
+			defer mgr.connStateLock.L.Unlock()
+
+			mgr.conn = conn
 			mgr.connState = connStateConnected
-			mgr.connStateLock.L.Unlock()
+
 			mgr.connStateLock.Broadcast()
 		}
 	}
@@ -63,24 +63,28 @@ func (mgr *connectionManager) backoff(n int) {
 	baseDelayMillis := 250.0
 	backoffFactor := math.Pow(2, math.Min(8.0, float64(n)))
 	backoff := time.Duration((backoffFactor+rand.Float64()*backoffFactor)*baseDelayMillis) * time.Millisecond
-	mgr.log("backoff %v => %v", n, backoff)
+	logger.Printf("%s: backoff %v => %v", mgr.name, n, backoff)
 	time.Sleep(backoff)
 }
 
 func (mgr *connectionManager) startReconnectLoop() {
 	go func() {
 		for {
-			mgr.connStateLock.L.Lock()
-			defer mgr.connStateLock.L.Unlock()
-
-			for mgr.connState == connStateConnected {
-				mgr.connStateLock.Wait()
-			}
-			mgr.connState = connStateConnecting
-
+			mgr.waitDisconnected()
 			mgr.connect()
 		}
 	}()
+}
+
+func (mgr *connectionManager) waitDisconnected() {
+	mgr.connStateLock.L.Lock()
+	defer mgr.connStateLock.L.Unlock()
+
+	for mgr.connState == connStateConnected {
+		mgr.connStateLock.Wait()
+	}
+
+	mgr.connState = connStateConnecting
 }
 
 func (mgr *connectionManager) signalConnErrAndWaitReconnected(err error) {
@@ -89,7 +93,6 @@ func (mgr *connectionManager) signalConnErrAndWaitReconnected(err error) {
 }
 
 func (mgr *connectionManager) signalConnErr(err error) {
-	mgr.log("Connection failure: %v", err)
 	mgr.connStateLock.L.Lock()
 	defer mgr.connStateLock.L.Unlock()
 	if mgr.connState != connStateConnecting {
@@ -98,13 +101,11 @@ func (mgr *connectionManager) signalConnErr(err error) {
 	mgr.connStateLock.Broadcast()
 }
 
-func (mgr *connectionManager) log(format string, args ...interface{}) {
-	log.Printf(mgr.name+": "+format+"\n", args...)
-}
-
 func (mgr *connectionManager) waitReconnected() {
+	logger.Printf("%s: waitReconnected", mgr.name)
 	mgr.connStateLock.L.Lock()
 	defer mgr.connStateLock.L.Unlock()
+
 	for mgr.connState != connStateConnected {
 		mgr.connStateLock.Wait()
 	}

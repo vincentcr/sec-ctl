@@ -2,8 +2,11 @@ package main
 
 import (
 	"log"
+	"os"
 	"tpi-mon/pkg/config"
 )
+
+var logger = log.New(os.Stderr, "[mock] ", log.LstdFlags|log.Lshortfile)
 
 func main() {
 	cfg, err := config.Load()

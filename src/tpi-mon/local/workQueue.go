@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"sync"
 )
 
@@ -65,5 +64,5 @@ func (q *workQueue) drain() {
 }
 
 func (q *workQueue) handleTaskError(err error) {
-	log.Panicln(err)
+	logger.Panicln(err)
 }

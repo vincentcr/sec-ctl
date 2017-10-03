@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"sync"
 	"time"
 	"tpi-mon/pkg/site"
@@ -77,6 +76,7 @@ func (c *cloudConnector) startReadLoop() {
 			o, err := conn.Read()
 			if err != nil {
 				c.connMgr.signalConnErrAndWaitReconnected(err)
+				logger.Println("cloudConnector: read loop: reconnected, resuming")
 			} else {
 				c.recvQueue.enqueue(o)
 			}
@@ -91,7 +91,7 @@ func (c *cloudConnector) recvMessage(i interface{}) error {
 	case ws.ControlMessage:
 		c.recvControlMessage(o)
 	default:
-		panic(fmt.Errorf("Unexpected message: %#v", i))
+		logger.Panicf("Unexpected message: %#v", i)
 	}
 	return nil
 }
@@ -115,7 +115,7 @@ func (c *cloudConnector) recvControlMessage(msg ws.ControlMessage) {
 		st := c.siteClient.GetState()
 		c.enqueueMessage(st)
 	default:
-		panic(fmt.Errorf("Unexpected controlMessage %v", msg))
+		logger.Panicf("Unexpected controlMessage %v", msg)
 	}
 }
 
@@ -127,7 +127,7 @@ func (c *cloudConnector) sendMessage(msg interface{}) error {
 
 	r := c.writeLimiter.Reserve()
 	if !r.OK() {
-		panic("not allowed to request a burst of 1")
+		logger.Panicf("impossible! not allowed to request a burst of 1")
 	}
 	time.Sleep(r.Delay())
 

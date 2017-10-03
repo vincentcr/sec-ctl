@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/hex"
-	"fmt"
 	"time"
 	"tpi-mon/pkg/site"
 	"tpi-mon/pkg/tpi"
@@ -23,7 +22,6 @@ type localClient struct {
 	eventChs       []chan site.Event
 	stateChangeChs []chan site.StateChange
 
-	errorCh             chan error
 	systemTroubleStatus site.SystemTroubleStatus
 }
 
@@ -106,7 +104,7 @@ func (c *localClient) Exec(cmd site.UserCommand) error {
 	case site.CmdPanic:
 		msg = tpi.ClientMessage{Code: tpi.ClientCodeTriggerPanicAlarm, Data: []byte(cmd.PanicTarget)}
 	default:
-		panic(fmt.Errorf("Unhandled user command %#v", cmd))
+		logger.Panicf("Unhandled user command %#v", cmd)
 	}
 
 	c.enqueueMessage(msg)
@@ -263,7 +261,7 @@ func (c *localClient) processLoginResult(msg tpi.ServerMessage) {
 		c.loggedIn = true
 		c.requestStateRefresh()
 	} else if loginRes == tpi.LoginResFailure {
-		c.errorCh <- fmt.Errorf("Login attempt rejected")
+		logger.Panicf("Login attempt failed: password rejected!")
 		c.loggedIn = false
 	} else {
 		loginMsg := tpi.ClientMessage{

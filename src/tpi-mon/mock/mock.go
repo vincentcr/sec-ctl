@@ -2,19 +2,11 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"net"
-	"os"
 	"tpi-mon/pkg/site"
 
 	"github.com/gin-gonic/gin"
 )
-
-var logger *log.Logger
-
-func init() {
-	logger = log.New(os.Stderr, "[mock server] ", log.LstdFlags)
-}
 
 // Run creates a new mock server
 func Run(bindHost string, tpiBindPort uint16, restBindPort uint16, password string, stateFile string) error {
