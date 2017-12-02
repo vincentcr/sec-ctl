@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	"net"
-	"tpi-mon/pkg/site"
+	"tpi-mon/pkg/sites"
 
 	"github.com/gin-gonic/gin"
 )
@@ -72,9 +72,9 @@ func setupRoutes(r *gin.Engine, ctrl *controller) {
 	//simulate alarms
 	r.POST("/sim/alarms/trigger", func(c *gin.Context) {
 		data := struct {
-			Type        site.AlarmType `json:"type" binding:"required"`
-			PartitionID string         `json:"partitionID"`
-			ZoneID      string         `json:"zoneID"`
+			Type        sites.AlarmType `json:"type" binding:"required"`
+			PartitionID string          `json:"partitionID"`
+			ZoneID      string          `json:"zoneID"`
 		}{}
 
 		if err := c.BindJSON(&data); err != nil {
@@ -92,8 +92,8 @@ func setupRoutes(r *gin.Engine, ctrl *controller) {
 	//simulate alarm restoral
 	r.POST("/sim/alarms/restore", func(c *gin.Context) {
 		data := struct {
-			Type        site.AlarmType `json:"type" binding:"required"`
-			PartitionID string         `json:"partitionID"`
+			Type        sites.AlarmType `json:"type" binding:"required"`
+			PartitionID string          `json:"partitionID"`
 		}{}
 
 		if err := c.BindJSON(&data); err != nil {

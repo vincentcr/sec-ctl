@@ -3,7 +3,7 @@ package main
 import (
 	"sync"
 	"time"
-	"tpi-mon/pkg/site"
+	"tpi-mon/pkg/sites"
 	"tpi-mon/pkg/ws"
 
 	"golang.org/x/time/rate"
@@ -14,9 +14,9 @@ const writeRateLimit = 128 * time.Millisecond
 
 // cloudConnector connects the local tpi client with a remote cloud
 type cloudConnector struct {
-	connState  connState
-	connMgr    *connectionManager
-	siteClient site.Client
+	connState connState
+	connMgr   *connectionManager
+	site      sites.Site
 
 	sendQueue     *workQueue
 	recvQueue     *workQueue
@@ -24,10 +24,10 @@ type cloudConnector struct {
 	connStateLock sync.Cond
 }
 
-func startCloudConnector(url string, token string, siteClient site.Client) {
+func startCloudConnector(url string, token string, site sites.Site) {
 
 	c := &cloudConnector{
-		siteClient:   siteClient,
+		site:         site,
 		writeLimiter: rate.NewLimiter(rate.Limit(1024), 256),
 	}
 
@@ -51,8 +51,8 @@ func startCloudConnector(url string, token string, siteClient site.Client) {
 
 func (c *cloudConnector) subscribeToTpiEvents() {
 
-	eventCh := c.siteClient.SubscribeToEvents()
-	stateChgCh := c.siteClient.SubscribeToStateChange()
+	eventCh := c.site.SubscribeToEvents()
+	stateChgCh := c.site.SubscribeToStateChange()
 
 	go func() {
 		for {
@@ -86,7 +86,7 @@ func (c *cloudConnector) startReadLoop() {
 
 func (c *cloudConnector) recvMessage(i interface{}) error {
 	switch o := i.(type) {
-	case site.UserCommand:
+	case sites.UserCommand:
 		c.recvUserCommand(o)
 	case ws.ControlMessage:
 		c.recvControlMessage(o)
@@ -96,11 +96,11 @@ func (c *cloudConnector) recvMessage(i interface{}) error {
 	return nil
 }
 
-func (c *cloudConnector) recvUserCommand(cmd site.UserCommand) {
-	if err := c.siteClient.Exec(cmd); err != nil {
+func (c *cloudConnector) recvUserCommand(cmd sites.UserCommand) {
+	if err := c.site.Exec(cmd); err != nil {
 
-		e := site.Event{
-			Level:       site.LevelError,
+		e := sites.Event{
+			Level:       sites.LevelError,
 			Code:        "UserCommandError",
 			Description: err.Error(),
 		}
@@ -112,7 +112,7 @@ func (c *cloudConnector) recvUserCommand(cmd site.UserCommand) {
 func (c *cloudConnector) recvControlMessage(msg ws.ControlMessage) {
 	switch msg.Code {
 	case ws.CtrlGetState:
-		st := c.siteClient.GetState()
+		st := c.site.GetState()
 		c.enqueueMessage(st)
 	default:
 		logger.Panicf("Unexpected controlMessage %v", msg)

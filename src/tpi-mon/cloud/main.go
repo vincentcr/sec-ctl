@@ -3,8 +3,8 @@ package main
 import (
 	"log"
 	"os"
-	"tpi-mon/pkg/config"
-	"tpi-mon/pkg/rest"
+	"tpi-mon/cloud/config"
+	"tpi-mon/cloud/db"
 )
 
 var logger = log.New(os.Stderr, "[cloud] ", log.LstdFlags|log.Lshortfile)
@@ -16,6 +16,17 @@ func main() {
 		logger.Panicln(err)
 	}
 
-	s := startServer(cfg.Cloud.WSBindHost, cfg.Cloud.WSBindPort)
-	rest.Run(s.GetClient, cfg.Cloud.RESTBindHost, cfg.Cloud.RESTBindPort)
+	db, err := db.OpenDB(cfg)
+	if err != nil {
+		logger.Panicln(err)
+	}
+
+	queue, err := newQueue(cfg.RedisHost, cfg.RedisPort)
+	if err != nil {
+		logger.Panicln(err)
+	}
+
+	registry := newRegistry(db, queue)
+
+	runRESTAPI(registry, db, cfg.RESTBindHost, cfg.RESTBindPort)
 }

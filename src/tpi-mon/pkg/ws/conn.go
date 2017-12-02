@@ -5,21 +5,22 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"tpi-mon/pkg/site"
+
+	"tpi-mon/pkg/sites"
 
 	"github.com/gorilla/websocket"
 )
 
 func init() {
 	gob.Register(ControlMessage{})
-	gob.Register(site.UserCommand{})
-	gob.Register(site.Event{})
-	gob.Register(site.Partition{})
-	gob.Register(site.Zone{})
-	gob.Register(site.StateChange{})
-	gob.Register(site.SystemState{})
-	gob.Register(site.SystemTroubleStatus(0))
-	gob.Register(site.Alarm{})
+	gob.Register(sites.UserCommand{})
+	gob.Register(sites.Event{})
+	gob.Register(sites.Partition{})
+	gob.Register(sites.Zone{})
+	gob.Register(sites.StateChange{})
+	gob.Register(sites.SystemState{})
+	gob.Register(sites.SystemTroubleStatus(0))
+	gob.Register(sites.Alarm{})
 }
 
 // Conn is a wrapper type of the websocket connection

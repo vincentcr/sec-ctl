@@ -14,4 +14,6 @@ COPY pkg /go/src/tpi-mon/pkg
 RUN find ./pkg/* -type d -print0 | xargs -0 -n1  go generate
 RUN find ./pkg/* -type d -print0 | xargs -0 -n1  go build -i
 
+VOLUME /root/.config/tpi-mon
+
 CMD ["app"]

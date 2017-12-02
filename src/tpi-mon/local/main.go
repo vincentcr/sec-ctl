@@ -3,25 +3,28 @@ package main
 import (
 	"log"
 	"os"
-	"tpi-mon/pkg/config"
-	"tpi-mon/pkg/rest"
-	"tpi-mon/pkg/site"
 )
+
+const appName = "Local"
 
 var logger = log.New(os.Stderr, "[local] ", log.LstdFlags|log.Lshortfile)
 
 func main() {
 
-	cfg, err := config.Load()
+	cfg, err := loadConfig()
 	if err != nil {
 		logger.Panicln(err)
 	}
 
-	client := newLocalClient(cfg.Local.TPIHost, cfg.Local.TPIPort, cfg.Local.TPIPassword)
-	registry := func(id string) site.Client { return client }
+	if cfg.SiteID == "" { // unset client id => first time!
+		if err := firstTime(&cfg); err != nil {
+			logger.Panicln(err)
+		}
+	}
 
-	startCloudConnector(cfg.Local.CloudWSURL, cfg.Local.CloudToken, client)
+	site := newLocalSite(cfg.TPIHost, cfg.TPIPort, cfg.TPIPassword, cfg.SiteID)
 
-	rest.Run(registry, cfg.Local.RESTBindHost, cfg.Local.RESTBindPort)
+	startCloudConnector(cfg.CloudWSURL, cfg.CloudToken, site)
 
+	runRESTAPI(site, cfg.RESTBindHost, cfg.RESTBindPort)
 }

@@ -6,17 +6,17 @@ import (
 	"tpi-mon/pkg/tpi"
 )
 
-type localClientConnector struct {
+type localSiteConnector struct {
 	sendQueue *workQueue
 	recvQueue *workQueue
 	connMgr   *connectionManager
 }
 
 // NewLocalClient creates a new local client, from the supplied local server info
-func newLocalConnection(hostname string, port uint16, recvFunc workQueueFunc) *localClientConnector {
-	c := &localClientConnector{}
+func newLocalSiteConnector(hostname string, port uint16, recvFunc workQueueFunc) *localSiteConnector {
+	c := &localSiteConnector{}
 
-	c.connMgr = newConnectionManager("local site", func() (interface{}, error) {
+	c.connMgr = newConnectionManager("local sites", func() (interface{}, error) {
 		servAddr := fmt.Sprintf("%s:%d", hostname, port)
 		tcpAddr, err := net.ResolveTCPAddr("tcp", servAddr)
 		if err != nil {
@@ -40,7 +40,7 @@ func newLocalConnection(hostname string, port uint16, recvFunc workQueueFunc) *l
 	return c
 }
 
-func (c *localClientConnector) startReadLoop() {
+func (c *localSiteConnector) startReadLoop() {
 	go func() {
 		for {
 			conn := c.connMgr.conn.(*net.TCPConn)
@@ -56,11 +56,11 @@ func (c *localClientConnector) startReadLoop() {
 	}()
 }
 
-func (c *localClientConnector) enqueueMessage(msg tpi.ClientMessage) {
+func (c *localSiteConnector) enqueueMessage(msg tpi.ClientMessage) {
 	c.sendQueue.enqueue(msg)
 }
 
-func (c *localClientConnector) sendMessage(i interface{}) error {
+func (c *localSiteConnector) sendMessage(i interface{}) error {
 	msg := i.(tpi.ClientMessage)
 	conn := c.connMgr.conn.(*net.TCPConn)
 	err := msg.Write(conn)

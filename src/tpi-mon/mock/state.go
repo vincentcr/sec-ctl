@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"tpi-mon/pkg/site"
+	"tpi-mon/pkg/sites"
 )
 
 const eventExpireDelay = time.Second * 60
@@ -28,11 +28,11 @@ type state struct {
 	password   string
 
 	Users map[string]string // PIN -> ID
-	site.SystemState
-	// Partitions    []*site.Partition
-	// Zones         []*site.Zone
+	sites.SystemState
+	// Partitions    []*sites.Partition
+	// Zones         []*sites.Zone
 	// TroubleStatus tpi.SystemTroubleStatus
-	// Alarms        []*site.Alarm
+	// Alarms        []*sites.Alarm
 }
 
 // creates a new state object from stateFilename
@@ -186,38 +186,38 @@ func (state *state) updateState(updater func() error) error {
 }
 
 // findPartition finds a partition by id
-func (state *state) findPartition(partID string) (site.Partition, error) {
+func (state *state) findPartition(partID string) (sites.Partition, error) {
 	for _, part := range state.Partitions {
 		if part.ID == partID {
 			return part, nil
 		}
 	}
-	return site.Partition{}, fmt.Errorf("partition %v not found", partID)
+	return sites.Partition{}, fmt.Errorf("partition %v not found", partID)
 }
 
 // findZone finds a zone by id
-func (state *state) findZone(zoneID string) (site.Zone, error) {
+func (state *state) findZone(zoneID string) (sites.Zone, error) {
 	for _, zone := range state.Zones {
 		if zone.ID == zoneID {
 			return zone, nil
 		}
 	}
-	return site.Zone{}, fmt.Errorf("zone %v not found", zoneID)
+	return sites.Zone{}, fmt.Errorf("zone %v not found", zoneID)
 }
 
 // processPartitionAlarm puts the target zone and partition in alarm state
 // and returns the relevant messages that must be sent to the client
-func (state *state) processAlarm(a site.Alarm) error {
+func (state *state) processAlarm(a sites.Alarm) error {
 
 	return state.updateState(func() error {
 
-		if a.AlarmType == site.AlarmTypePartition {
+		if a.AlarmType == sites.AlarmTypePartition {
 			part, err := state.findPartition(a.PartitionID)
 			if err != nil {
 				return err
 			}
 
-			part.State = site.PartitionStateInAlarm
+			part.State = sites.PartitionStateInAlarm
 			part.TroubleStateLED = true
 
 			zone, err := state.findZone(a.ZoneID)
@@ -225,7 +225,7 @@ func (state *state) processAlarm(a site.Alarm) error {
 				return err
 			}
 
-			zone.State = site.ZoneStateAlarm
+			zone.State = sites.ZoneStateAlarm
 		}
 
 		state.Alarms = append(state.Alarms, a)
@@ -234,13 +234,13 @@ func (state *state) processAlarm(a site.Alarm) error {
 	})
 }
 
-func (state *state) processAlarmRestore(a site.Alarm) error {
+func (state *state) processAlarmRestore(a sites.Alarm) error {
 
 	return state.updateState(func() error {
 
 		a.Restored = time.Now()
 
-		if a.AlarmType == site.AlarmTypePartition {
+		if a.AlarmType == sites.AlarmTypePartition {
 			part, err := state.findPartition(a.PartitionID)
 			if err != nil {
 				return err
@@ -249,9 +249,9 @@ func (state *state) processAlarmRestore(a site.Alarm) error {
 			if err != nil {
 				return err
 			}
-			part.State = site.PartitionStateReady
+			part.State = sites.PartitionStateReady
 			part.TroubleStateLED = part.KeypadLEDState != 0 && part.KeypadLEDFlashState != 0
-			zone.State = site.ZoneStateRestore
+			zone.State = sites.ZoneStateRestore
 		}
 
 		return nil
@@ -260,25 +260,25 @@ func (state *state) processAlarmRestore(a site.Alarm) error {
 }
 
 // findUnrestoredAlarm finds an unrestored alarm by type and partition
-func (state *state) findUnrestoredAlarm(a site.Alarm) (site.Alarm, error) {
+func (state *state) findUnrestoredAlarm(a sites.Alarm) (sites.Alarm, error) {
 	for _, a2 := range state.Alarms {
 		if a.AlarmType == a2.AlarmType && a.PartitionID == a2.PartitionID && a2.Restored.IsZero() {
 			return a2, nil
 		}
 	}
-	return site.Alarm{}, fmt.Errorf("alarm (%v,%v) not found", a.AlarmType, a.PartitionID)
+	return sites.Alarm{}, fmt.Errorf("alarm (%v,%v) not found", a.AlarmType, a.PartitionID)
 }
 
-func (state *state) armPartition(part site.Partition) error {
+func (state *state) armPartition(part sites.Partition) error {
 	return state.updateState(func() error {
-		part.State = site.PartitionStateArmed
+		part.State = sites.PartitionStateArmed
 		return nil
 	})
 }
 
-func (state *state) disarmPartition(part site.Partition) error {
+func (state *state) disarmPartition(part sites.Partition) error {
 	return state.updateState(func() error {
-		part.State = site.PartitionStateReady
+		part.State = sites.PartitionStateReady
 		return nil
 	})
 }

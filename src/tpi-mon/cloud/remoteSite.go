@@ -1,36 +1,37 @@
 package main
 
 import (
-	"tpi-mon/pkg/site"
+	"encoding/json"
+	"tpi-mon/cloud/db"
+	"tpi-mon/pkg/sites"
 	"tpi-mon/pkg/ws"
 )
 
 type remoteSite struct {
-	id                  string
+	id                  db.UUID
 	conn                *ws.Conn
-	registry            *clientRegistry
-	partitions          map[string]site.Partition
-	zones               map[string]site.Zone
-	systemTroubleStatus site.SystemTroubleStatus
-	alarms              []site.Alarm
-	eventChs            []chan site.Event
-	stateChangeChs      []chan site.StateChange
+	queue               *queue
+	partitions          map[string]sites.Partition
+	zones               map[string]sites.Zone
+	systemTroubleStatus sites.SystemTroubleStatus
+	alarms              []sites.Alarm
+	eventChs            []chan sites.Event
+	stateChangeChs      []chan sites.StateChange
 }
 
-type flowCtrl struct {
-	done chan struct{}
-	err  chan error
+func getSiteQueueName(id db.UUID, purpose string) string {
+	return "sites:" + id.String() + ":" + purpose
 }
 
-func initRemoteSite(conn *ws.Conn, registry *clientRegistry) {
+func newRemoteSite(site db.Site, conn *ws.Conn, queue *queue) *remoteSite {
 	c := &remoteSite{
-		id:             "1",
+		id:             site.ID,
 		conn:           conn,
-		registry:       registry,
-		partitions:     map[string]site.Partition{},
-		zones:          map[string]site.Zone{},
-		eventChs:       make([]chan site.Event, 0),
-		stateChangeChs: make([]chan site.StateChange, 0),
+		queue:          queue,
+		partitions:     map[string]sites.Partition{},
+		zones:          map[string]sites.Zone{},
+		eventChs:       make([]chan sites.Event, 0),
+		stateChangeChs: make([]chan sites.StateChange, 0),
 	}
 
 	go func() {
@@ -41,6 +42,22 @@ func initRemoteSite(conn *ws.Conn, registry *clientRegistry) {
 		c.send(ws.ControlMessage{Code: ws.CtrlGetState})
 	}()
 
+	go func() {
+		queue.startConsumeLoop(getSiteQueueName(site.ID, "commands"), func(msg qMessage) error {
+			cmd := sites.UserCommand{}
+			err := json.Unmarshal(msg.data, &cmd)
+			if err != nil {
+				return err
+			}
+			err = c.conn.Write(cmd)
+			if err != nil {
+				c.handleConnErr(err)
+			}
+			return err
+		})
+	}()
+
+	return c
 }
 
 func (c *remoteSite) readLoop() {
@@ -52,11 +69,11 @@ func (c *remoteSite) readLoop() {
 		}
 
 		switch o := i.(type) {
-		case site.SystemState:
+		case sites.SystemState:
 			c.processState(o)
-		case site.StateChange:
+		case sites.StateChange:
 			c.processStateChange(o)
-		case site.Event:
+		case sites.Event:
 			c.processEvent(o)
 		default:
 			logger.Panicf("Unexpected message: %#v", i)
@@ -73,11 +90,11 @@ func (c *remoteSite) send(obj interface{}) {
 }
 
 func (c *remoteSite) handleConnErr(err error) {
-	c.registry.removeClient(c)
 	logger.Println("client disconnected:", err)
+	c.queue.publish(queueNameSiteRemoved, []byte(c.id))
 }
 
-func (c *remoteSite) Exec(cmd site.UserCommand) error {
+func (c *remoteSite) Exec(cmd sites.UserCommand) error {
 
 	if err := cmd.Validate(); err != nil {
 		return err
@@ -88,19 +105,7 @@ func (c *remoteSite) Exec(cmd site.UserCommand) error {
 	return nil
 }
 
-func (c *remoteSite) SubscribeToEvents() chan site.Event {
-	ch := make(chan site.Event)
-	c.eventChs = append(c.eventChs, ch)
-	return ch
-}
-
-func (c *remoteSite) SubscribeToStateChange() chan site.StateChange {
-	ch := make(chan site.StateChange)
-	c.stateChangeChs = append(c.stateChangeChs, ch)
-	return ch
-}
-
-func (c *remoteSite) processState(st site.SystemState) {
+func (c *remoteSite) processState(st sites.SystemState) {
 
 	for _, p := range st.Partitions {
 		c.updatePartition(p)
@@ -109,47 +114,49 @@ func (c *remoteSite) processState(st site.SystemState) {
 		c.updateZone(z)
 	}
 
-	c.id = st.ID
 	c.alarms = st.Alarms
 	c.systemTroubleStatus = st.TroubleStatus
-
-	c.registry.addClient(c)
 }
 
-func (c *remoteSite) processStateChange(chg site.StateChange) {
+func (c *remoteSite) processStateChange(chg sites.StateChange) {
 	switch chg.Type {
-	case site.StateChangePartition:
-		c.updatePartition(chg.Data.(site.Partition))
-	case site.StateChangeZone:
-		c.updateZone(chg.Data.(site.Zone))
-	case site.StateChangeSystemTroubleStatus:
-		c.updateSystemTroubleStatus(chg.Data.(site.SystemTroubleStatus))
+	case sites.StateChangePartition:
+		c.updatePartition(chg.Data.(sites.Partition))
+	case sites.StateChangeZone:
+		c.updateZone(chg.Data.(sites.Zone))
+	case sites.StateChangeSystemTroubleStatus:
+		c.updateSystemTroubleStatus(chg.Data.(sites.SystemTroubleStatus))
 	default:
 		logger.Panicf("Unhandled state change: %v", chg)
 	}
 }
 
-func (c *remoteSite) updatePartition(part site.Partition) {
+func (c *remoteSite) updatePartition(part sites.Partition) {
 	c.partitions[part.ID] = part
 }
 
-func (c *remoteSite) updateZone(zone site.Zone) {
+func (c *remoteSite) updateZone(zone sites.Zone) {
 	c.zones[zone.ID] = zone
 }
 
-func (c *remoteSite) updateSystemTroubleStatus(status site.SystemTroubleStatus) {
+func (c *remoteSite) updateSystemTroubleStatus(status sites.SystemTroubleStatus) {
 	c.systemTroubleStatus = status
 }
 
-func (c *remoteSite) processEvent(e site.Event) {
-	for _, ch := range c.eventChs {
-		ch <- e
+func (c *remoteSite) processEvent(e sites.Event) {
+
+	data, err := json.Marshal(e)
+	if err != nil {
+		// this should really work, if it doesn't there is a bug.
+		logger.Panicf("Unable to jsonify %#v: %v", e, err)
 	}
+
+	c.queue.publish(getSiteQueueName(c.id, "events"), data)
 }
 
-func (c *remoteSite) GetState() site.SystemState {
-	return site.SystemState{
-		ID:            c.id,
+func (c *remoteSite) GetState() sites.SystemState {
+	return sites.SystemState{
+		ID:            c.id.String(),
 		Partitions:    c.getPartitions(),
 		Zones:         c.getZones(),
 		Alarms:        c.alarms,
@@ -157,8 +164,8 @@ func (c *remoteSite) GetState() site.SystemState {
 	}
 }
 
-func (c *remoteSite) getPartitions() []site.Partition {
-	parts := make([]site.Partition, len(c.partitions))
+func (c *remoteSite) getPartitions() []sites.Partition {
+	parts := make([]sites.Partition, len(c.partitions))
 	idx := 0
 	for _, p := range c.partitions {
 		parts[idx] = p
@@ -167,8 +174,8 @@ func (c *remoteSite) getPartitions() []site.Partition {
 	return parts
 }
 
-func (c *remoteSite) getZones() []site.Zone {
-	zones := make([]site.Zone, len(c.zones))
+func (c *remoteSite) getZones() []sites.Zone {
+	zones := make([]sites.Zone, len(c.zones))
 	idx := 0
 	for _, z := range c.zones {
 		zones[idx] = z
