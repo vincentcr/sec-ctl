@@ -2,49 +2,54 @@ version: "3.2"
 services:
 
   cloud-db:
-    image: tpi-mon-db
+    image: sec-ctl-db
     volumes:
-      - "./mock-tpi-state.json:/mock-tpi-state.json"
+      - ".docker-state/dev-db:/var/lib/postgresql/data"
+
+  test-cloud-db:
+    image: sec-ctl-db
+    volumes:
+      - ".docker-state/test-db:/var/lib/postgresql/data"
 
   cloud-redis:
     image: redis:4.0
 
   cloud:
-    image: tpi-mon-cloud
+    image: sec-ctl-cloud
     ports:
       - 9753:9753
     links:
       - cloud-db:db
       - cloud-redis:redis
     environment:
-      - "Tpimon.Cloud.DBHost=db"
+      - "SecCtl.Cloud.DBHost=db"
 
 
   local:
-    image: tpi-mon-local
+    image: sec-ctl-local
     links:
       - mock:mock
       - cloud:cloud
       - local-redis:redis
     environment:
-      - Tpimon.Local.TPIHost=mock
-      - Tpimon.Local.TPIPassword=mock123
-      - Tpimon.Local.CloudWSURL=ws://cloud:9754/ws
-      - Tpimon.Local.CloudToken=cloud123
+      - SecCtl.Local.TPIHost=mock
+      - SecCtl.Local.TPIPassword=mock123
+      - SecCtl.Local.CloudWSURL=ws://cloud:9754/ws
+      - SecCtl.Local.CloudToken=cloud123
     ports:
       - 9752:9752
     volumes:
-      - "./local-config.json:/root/.config/tpi-mon/Local.json"
+      - "./local-config.json:/root/.config/sec-ctl/Local.json"
 
   local-redis:
     image: redis:4.0
 
   mock:
-    image: tpi-mon-mock
+    image: sec-ctl-mock
     volumes:
-      - "./mock-tpi-state.json:/mock-tpi-state.json"
+      - ".docker-state/mock-state.json:/mock-state.json"
     environment:
-      - "Tpimon.Mock.StateFilePath=/mock-tpi-state.json"
+      - "SecCtl.Mock.StateFilePath=/mock-state.json"
     ports:
       - 9751:9751
 
