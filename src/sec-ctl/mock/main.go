@@ -10,7 +10,7 @@ var logger = log.New(os.Stderr, "[mock] ", log.LstdFlags|log.Lshortfile)
 
 func main() {
 	cfg := config{}
-	err := util.LoadConfig("Mock", &cfg)
+	err := util.LoadConfig(&cfg, &defaultConfig)
 	if err != nil {
 		log.Panicln(err)
 	}

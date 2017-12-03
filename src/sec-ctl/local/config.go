@@ -1,7 +1,5 @@
 package main
 
-import "sec-ctl/pkg/util"
-
 type config struct {
 	SiteID string
 
@@ -17,6 +15,11 @@ type config struct {
 	CloudBaseURL string
 }
 
+// AppName returns the name of the app to configured
+func (cfg *config) AppName() string {
+	return "Local"
+}
+
 var defaultConfig = config{
 	TPIPort:      4025,
 	TPIPassword:  "mock123",
@@ -24,14 +27,4 @@ var defaultConfig = config{
 	RESTBindPort: 9752,
 	CloudWSURL:   "ws://localhost:9754",
 	CloudBaseURL: "http://localhost:9753",
-}
-
-func loadConfig() (config, error) {
-	cfg := config{}
-
-	if err := util.LoadConfig(appName, cfg); err != nil {
-		return config{}, err
-	}
-
-	return cfg, nil
 }

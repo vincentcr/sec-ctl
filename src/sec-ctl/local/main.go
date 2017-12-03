@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"os"
+	"sec-ctl/pkg/util"
 )
 
 const appName = "Local"
@@ -11,8 +12,8 @@ var logger = log.New(os.Stderr, "[local] ", log.LstdFlags|log.Lshortfile)
 
 func main() {
 
-	cfg, err := loadConfig()
-	if err != nil {
+	cfg := config{}
+	if err := util.LoadConfig(&cfg, &defaultConfig); err != nil {
 		logger.Panicln(err)
 	}
 

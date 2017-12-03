@@ -8,6 +8,10 @@ type config struct {
 	StateFilename string
 }
 
+func (cfg *config) AppName() string {
+	return "Mock"
+}
+
 var defaultConfig = config{
 	BindHost:      "0.0.0.0",
 	TPIBindPort:   4025,
