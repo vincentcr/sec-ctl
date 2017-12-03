@@ -1,0 +1,55 @@
+version: "3.2"
+services:
+
+  cloud-db:
+    image: sec-ctl-db
+    volumes:
+      - ".docker-state/db-test:/var/lib/postgresql/data"
+
+  cloud-redis:
+    image: redis:4.0
+
+  cloud:
+    image: sec-ctl-cloud
+    links:
+      - cloud-db:db
+      - cloud-redis:redis
+    environment:
+      - "SecCtl.Cloud.DBHost=db"
+    volumes:
+      - "./config:/config"
+    command: go test sec-ctl/cloud/...
+
+
+  pkg:
+    image: sec-ctl-pkg
+    command: go test sec-ctl/pkg/...
+
+  # local:
+  #   image: sec-ctl-local
+  #   links:
+  #     - mock:mock
+  #     - cloud:cloud
+  #     - local-redis:redis
+  #   environment:
+  #     - SecCtl.Local.TPIHost=mock
+  #     - SecCtl.Local.TPIPassword=mock123
+  #     - SecCtl.Local.CloudWSURL=ws://cloud:9754/ws
+  #     - SecCtl.Local.CloudToken=cloud123
+  #   ports:
+  #     - 9752:9752
+  #   volumes:
+  #     - "./local-config.json:/root/.config/sec-ctl/Local.json"
+
+  # local-redis:
+  #   image: redis:4.0
+
+  # mock:
+  #   image: sec-ctl-mock
+  #   volumes:
+  #     - ".docker-state/mock-state.json:/mock-state.json"
+  #   environment:
+  #     - "SecCtl.Mock.StateFilePath=/mock-state.json"
+  #   ports:
+  #     - 9751:9751
+

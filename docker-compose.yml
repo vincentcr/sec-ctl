@@ -4,12 +4,7 @@ services:
   cloud-db:
     image: sec-ctl-db
     volumes:
-      - ".docker-state/dev-db:/var/lib/postgresql/data"
-
-  test-cloud-db:
-    image: sec-ctl-db
-    volumes:
-      - ".docker-state/test-db:/var/lib/postgresql/data"
+      - ".docker-state/db-dev:/var/lib/postgresql/data"
 
   cloud-redis:
     image: redis:4.0
@@ -23,7 +18,6 @@ services:
       - cloud-redis:redis
     environment:
       - "SecCtl.Cloud.DBHost=db"
-
 
   local:
     image: sec-ctl-local

@@ -3,7 +3,7 @@ PKG_DIR = src/sec-ctl
 
 DB_PASSWORD := secctl_dev123
 
-.PHONY: all clean db
+.PHONY: all clean db pkg
 
 all: local cloud mock
 
@@ -22,8 +22,12 @@ db:
 mock: pkg
 	docker build -t sec-ctl-mock -f $(PKG_DIR)/mock/Dockerfile $(PKG_DIR)
 
-test: test-cloud
+test: test-pkg test-cloud
 
-test-cloud:
-	docker-compose up -d test-cloud-db
-	cd $(PKG_DIR)/cloud/db && go test
+test-pkg: pkg
+	docker-compose -f docker-compose.test.yml up pkg
+
+test-cloud: cloud
+	docker-compose -f docker-compose.test.yml up -d cloud-db
+	#cd $(PKG_DIR)/cloud/db && go test
+	docker-compose -f docker-compose.test.yml up cloud
