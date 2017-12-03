@@ -1,8 +1,8 @@
 FROM postgres:9.5-alpine
 
 ARG DB_PASSWORD
-ENV DB_NAME tpimon_dev
-ENV DB_USER tpimon_dev
+ENV DB_NAME secctl_dev
+ENV DB_USER secctl_dev
 
 RUN  mkdir /pgsql-bootstrap
 
