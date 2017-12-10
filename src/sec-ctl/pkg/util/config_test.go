@@ -1,11 +1,12 @@
 package util
 
 import (
-	"fmt"
 	"os"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/vincentcr/testify/assert"
 )
 
 const testKeyPfx = "ConfTest"
@@ -77,7 +78,7 @@ func TestLoadConfigDefaultsOnly(t *testing.T) {
 		t.Fatalf("LoadConfig errored out: %v", err)
 	}
 
-	assertConfTestSimpleEqual(t, defaults, cfg, "defaults only")
+	assert.Equal(t, defaults, cfg)
 }
 
 func TestLoadConfigDefaultsWithEnv(t *testing.T) {
@@ -95,7 +96,7 @@ func TestLoadConfigDefaultsWithEnv(t *testing.T) {
 	defaults.S2 = "abc"
 	defaults.F1 = 3.141592
 
-	assertConfTestSimpleEqual(t, defaults, cfg, "defaults with env")
+	assert.Equal(t, defaults, cfg)
 }
 
 func TestLoadConfigDefaultsWithEnvNestedObject(t *testing.T) {
@@ -115,7 +116,7 @@ func TestLoadConfigDefaultsWithEnvNestedObject(t *testing.T) {
 	defaults.ST1.F1 = 3.141592
 	defaults.ST1.F2 = 2.718281
 
-	assertconfTestComplexEqual(t, defaults, cfg, "nested env vars")
+	assert.Equal(t, defaults, cfg)
 }
 
 func TestLoadConfigErrorsOnInvalidEnvKeyPath(t *testing.T) {
@@ -140,7 +141,7 @@ func TestCreateConfigFromDefaults(t *testing.T) {
 		t.Fatalf("loadConfigFromDefaults errored out: %v", err)
 	}
 
-	assertConfTestSimpleEqual(t, defaults, cfg, "loadConfigFromDefaults")
+	assert.Equal(t, defaults, cfg)
 }
 
 func TestDeepCopy(t *testing.T) {
@@ -155,7 +156,7 @@ func TestDeepCopy(t *testing.T) {
 	t.Log("src =", src)
 	t.Log("dst =", dst)
 
-	assertconfTestComplexEqual(t, mkComplex(), dst, "complex struct")
+	assert.Equal(t, mkComplex(), dst)
 }
 
 func TestParseVal(t *testing.T) {
@@ -270,7 +271,7 @@ func TestParseVal(t *testing.T) {
 			t.Fatalf("parseVal failed for (%v,%v): %v", tc.input, tc.kind, err)
 		}
 
-		assertEqual(t, tc.expected, a, "parseVal(%v, %v)", tc.input, tc.kind)
+		assert.Equal(t, tc.expected, a, "parseVal(%v, %v)", tc.input, tc.kind)
 	}
 }
 
@@ -293,134 +294,4 @@ func TestParseValRejectsInvalid(t *testing.T) {
 		}
 	}
 
-}
-
-func assertConfTestSimpleEqual(t *testing.T, e, a confTestSimple, msgFmt string, msgArgs ...interface{}) {
-	t.Helper()
-
-	msg := fmt.Sprintf(msgFmt, msgArgs...)
-
-	assertEqual(t, e.I1, a.I1, "%v: I1", msg)
-	assertEqual(t, e.S1, a.S1, "%v: S1", msg)
-	assertEqual(t, e.S2, a.S2, "%v: S2", msg)
-	assertEqual(t, e.F1, a.F1, "%v: F1", msg)
-}
-
-func assertconfTestComplexEqual(t *testing.T, e, a confTestComplex, msgFmt string, msgArgs ...interface{}) {
-	t.Helper()
-
-	msg := fmt.Sprintf(msgFmt, msgArgs...)
-
-	assertEqual(t, e.I1, a.I1, "%v: I1", msg)
-	assertEqual(t, e.S1, a.S1, "%v: S1", msg)
-
-	assertConfTestSimpleEqual(t, e.ST1, a.ST1, "%v: ST1", msg)
-
-	assertNotEqual(t, &e.A1, &a.A1, "%v: A1 should not be same ref", msg)
-
-	assertEqual(t, len(e.A1), len(a.A1), "%v: A1 len", msg)
-	for i, v := range e.A1 {
-		assertEqual(t, v, a.A1[i], "%v: A1[%v]", msg, i)
-	}
-
-	assertNotEqual(t, &e.M1, &a.M1, "%v: M1 should not be same ref", msg)
-	assertEqual(t, len(e.M1), len(a.M1), "%v: M1 len", msg)
-	for k, v := range e.M1 {
-		assertEqual(t, v, a.M1[k], "%v: M1[%v]", msg, k)
-	}
-
-	assertNotEqual(t, &e.A2, &a.A2, "%v: A2 should not be same ref", msg)
-	assertEqual(t, len(e.A2), len(a.A2), "%v: A2 len", msg)
-	for i, v := range e.A2 {
-		assertConfTestSimpleEqual(t, v, a.A2[i], "%v: A2[%v]", msg, i)
-	}
-
-	assertNotEqual(t, &e.M2, &a.M2, "%v: M2 should not be same ref", msg)
-	assertEqual(t, len(e.M2), len(a.M2), "%v: M2 len", msg)
-	for k, v := range e.M2 {
-		assertConfTestSimpleEqual(t, v, a.M2[k], "%v: M2[%v]", msg, k)
-	}
-
-}
-
-func assertNotEqual(t *testing.T, e interface{}, a interface{}, msgFmt string, msgArgs ...interface{}) {
-	t.Helper()
-
-	if e == a {
-		assertInfo := fmt.Sprintf("%#v == %#v", e, a)
-		msg := fmt.Sprintf(msgFmt, msgArgs...)
-		t.Fatalf("Assertion failed: %v\n\t%v", msg, assertInfo)
-	}
-
-}
-
-func assertEqual(t *testing.T, e interface{}, a interface{}, msgFmt string, msgArgs ...interface{}) {
-	t.Helper()
-
-	eV := reflect.ValueOf(e)
-	aV := reflect.ValueOf(a)
-
-	if eV.Kind() != aV.Kind() {
-		assertInfo := fmt.Sprintf("%v != %v", eV.Kind(), aV.Kind())
-		msg := fmt.Sprintf(msgFmt, msgArgs...)
-		t.Fatalf("Assertion failed: not same kind: %v\n\t%v", msg, assertInfo)
-	}
-
-	if eV.Type() != aV.Type() {
-		assertInfo := fmt.Sprintf("%v != %v", eV.Type(), aV.Type())
-		msg := fmt.Sprintf(msgFmt, msgArgs...)
-		t.Fatalf("Assertion failed: not same type: %v\n\t%v", msg, assertInfo)
-	}
-
-	if e != a {
-		assertInfo := fmt.Sprintf("%#v != %#v", e, a)
-		msg := fmt.Sprintf(msgFmt, msgArgs...)
-		t.Fatalf("Assertion failed: %v\n\t%v", msg, assertInfo)
-	}
-}
-
-func assertSliceEqual(t *testing.T, e interface{}, a interface{}, msgFmt string, msgArgs ...interface{}) {
-	t.Helper()
-
-	msg := fmt.Sprintf(msgFmt, msgArgs...)
-
-	eV := reflect.ValueOf(e)
-	aV := reflect.ValueOf(a)
-
-	if eV.Kind() != reflect.Slice {
-		t.Fatalf("%v: should be a slice", msg)
-	}
-
-	assertEqual(t, eV.Type(), aV.Type(), "%v: type not equal", msg)
-	assertEqual(t, eV.Len(), aV.Len(), "%v: len not equal", msg)
-
-	for i := 0; i < eV.Len(); i++ {
-		ei := eV.Index(i).Interface()
-		ai := aV.Index(i).Interface()
-		assertEqual(t, ei, ai, "%v: not equal at %v", msg, i)
-	}
-}
-
-func assertMapEqual(t *testing.T, e interface{}, a interface{}, msgFmt string, msgArgs ...interface{}) {
-	t.Helper()
-
-	msg := fmt.Sprintf(msgFmt, msgArgs...)
-
-	eV := reflect.ValueOf(e)
-	aV := reflect.ValueOf(a)
-
-	if eV.Kind() != reflect.Map {
-		t.Fatalf("%v: should be a map", msg)
-		t.Fail()
-		return
-	}
-
-	assertEqual(t, eV.Type(), aV.Type(), "%v: type not equal", msg)
-	assertEqual(t, eV.Len(), aV.Len(), "%v: len not equal", msg)
-
-	for _, k := range eV.MapKeys() {
-		ek := eV.MapIndex(k).Interface()
-		ak := aV.MapIndex(k).Interface()
-		assertEqual(t, ek, ak, "%v: not equal at %v", msg, k)
-	}
 }
