@@ -1,4 +1,6 @@
-SecCtl is a cloud bridge to the Envisalink TCP/IP module for DSC and Honeywell alarm system panels. It monitors and relays security events, as well as allowing sending commands to the panel through a REST API.
+## SecCtl
+
+SecCtl is a cloud bridge to the Envisalink TCP/IP module for DSC and Honeywell alarm system panels. It monitors for and relays security events, as well as allowing sending commands to the panel through a REST API.
 
 SecCtl is built out of 3 principal components:
  * `local`: an on-premise monitor daemon, collecting events from, and sending commands to, the Envisalink module;
